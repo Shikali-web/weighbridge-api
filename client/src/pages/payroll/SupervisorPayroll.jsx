@@ -1,0 +1,139 @@
+import React, { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Download, CheckCircle } from 'lucide-react';
+import { toast } from 'sonner';
+import WeekPicker from '../../components/shared/WeekPicker';
+import DataTable from '../../components/shared/DataTable';
+import StatusBadge from '../../components/shared/StatusBadge';
+import ConfirmDialog from '../../components/shared/ConfirmDialog';
+import { Button } from '../../components/ui/button';
+import { getSupervisorPayroll, generateSupervisorPayroll, markSupervisorPaid } from '../../api/payroll';
+import { formatCurrency, formatTons, getISOWeek } from '../../utils/formatters';
+
+const SupervisorPayroll = () => {
+  const currentDate = new Date();
+  const [week, setWeek] = useState(getISOWeek(currentDate));
+  const [year, setYear] = useState(currentDate.getFullYear());
+  const queryClient = useQueryClient();
+
+  const { data: payroll, isLoading } = useQuery({
+    queryKey: ['supervisor-payroll', week, year],
+    queryFn: () => getSupervisorPayroll(week, year)
+  });
+
+  const generateMutation = useMutation({
+    mutationFn: () => generateSupervisorPayroll(week, year),
+    onSuccess: () => {
+      toast.success('Supervisor payroll generated successfully');
+      queryClient.invalidateQueries(['supervisor-payroll']);
+    },
+    onError: (error) => {
+      toast.error(error.message || 'Failed to generate payroll');
+    }
+  });
+
+  const markPaidMutation = useMutation({
+    mutationFn: markSupervisorPaid,
+    onSuccess: () => {
+      toast.success('Payroll marked as paid');
+      queryClient.invalidateQueries(['supervisor-payroll']);
+    },
+    onError: (error) => {
+      toast.error(error.message || 'Failed to mark as paid');
+    }
+  });
+
+  const handleWeekChange = (newWeek, newYear) => {
+    setWeek(newWeek);
+    setYear(newYear);
+  };
+
+  const payrollData = payroll?.data || [];
+  const totalPayroll = payrollData.reduce((sum, item) => sum + (item.weekly_pay || 0), 0);
+  const paidCount = payrollData.filter(item => item.payment_status === 'paid').length;
+  const unpaidCount = payrollData.length - paidCount;
+  const totalOutstanding = payrollData
+    .filter(item => item.payment_status !== 'paid')
+    .reduce((sum, item) => sum + (item.weekly_pay || 0), 0);
+
+  const columns = [
+    { key: "supervisor_name", label: "Supervisor Name" },
+    { key: "total_trips", label: "Total Trips" },
+    { key: "total_tons", label: "Total Tons", render: (value) => formatTons(value) },
+    { key: "weekly_pay", label: "Weekly Pay", render: (value) => formatCurrency(value) },
+    { 
+      key: "payment_status", 
+      label: "Paid Status",
+      render: (value) => <StatusBadge status={value} />
+    },
+    {
+      key: "actions",
+      label: "Action",
+      render: (_, row) => (
+        row.payment_status === 'paid' ? (
+          <Button variant="ghost" size="sm" disabled className="text-green-600">
+            <CheckCircle className="h-4 w-4 mr-1" />
+            Paid ✓
+          </Button>
+        ) : (
+          <ConfirmDialog
+            title="Mark as Paid"
+            description={`Are you sure you want to mark ${row.supervisor_name}'s payroll as paid?`}
+            onConfirm={() => markPaidMutation.mutate(row.id)}
+            trigger={
+              <Button variant="outline" size="sm" className="text-green-600 border-green-600">
+                Mark Paid
+              </Button>
+            }
+          />
+        )
+      )
+    }
+  ];
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-gray-900">Supervisor Payroll</h2>
+        <Button 
+          onClick={() => generateMutation.mutate()}
+          disabled={generateMutation.isLoading}
+          className="bg-primary text-white"
+        >
+          <Download className="h-4 w-4 mr-2" />
+          Generate Payroll
+        </Button>
+      </div>
+
+      <WeekPicker week={week} year={year} onChange={handleWeekChange} />
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-white rounded-lg shadow p-4">
+          <p className="text-sm text-gray-600">Total Payroll</p>
+          <p className="text-2xl font-bold text-primary">{formatCurrency(totalPayroll)}</p>
+        </div>
+        <div className="bg-white rounded-lg shadow p-4">
+          <p className="text-sm text-gray-600">Paid</p>
+          <p className="text-2xl font-bold text-green-600">{paidCount}</p>
+        </div>
+        <div className="bg-white rounded-lg shadow p-4">
+          <p className="text-sm text-gray-600">Unpaid</p>
+          <p className="text-2xl font-bold text-red-600">{unpaidCount}</p>
+        </div>
+        <div className="bg-white rounded-lg shadow p-4">
+          <p className="text-sm text-gray-600">Total Outstanding</p>
+          <p className="text-2xl font-bold text-amber-600">{formatCurrency(totalOutstanding)}</p>
+        </div>
+      </div>
+
+      <DataTable
+        columns={columns}
+        data={payrollData}
+        loading={isLoading}
+        emptyMessage="No supervisor payroll data found for this week"
+      />
+    </div>
+  );
+};
+
+export default SupervisorPayroll;
