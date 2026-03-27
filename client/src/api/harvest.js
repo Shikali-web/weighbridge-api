@@ -6,3 +6,7 @@ export const createHarvestAssignment = (data) => apiClient.post('/harvest-assign
 export const updateHarvestAssignment = (id, data) => apiClient.put(`/harvest-assignments/${id}`, data);
 export const deleteHarvestAssignment = (id) => apiClient.delete(`/harvest-assignments/${id}`);
 export const computeHarvestFinancials = (id) => apiClient.post(`/harvest-assignments/${id}/compute-financials`);
+
+// Get financials by assignment ID
+export const getHarvestFinancialsByAssignment = (assignmentId) => 
+  apiClient.get(`/harvest-financials?assignment_id=${assignmentId}`);

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, Edit, Trash2, Eye } from 'lucide-react';
 import { toast } from 'sonner';
@@ -11,10 +12,10 @@ import { getHarvestAssignments, deleteHarvestAssignment } from '../../api/harves
 import { formatCurrency, formatTons } from '../../utils/formatters';
 
 const HarvestList = () => {
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingAssignment, setEditingAssignment] = useState(null);
   const queryClient = useQueryClient();
 
   const { data: assignments, isLoading } = useQuery({
@@ -33,13 +34,12 @@ const HarvestList = () => {
     }
   });
 
-  const handleEdit = (assignment) => {
-    setEditingAssignment(assignment);
-    setIsFormOpen(true);
+  const handleView = (id) => {
+    navigate(`/harvesting/${id}`);
   };
 
   const columns = [
-    { key: "id", label: "Assignment ID" },
+    { key: "id", label: "ID" },
     { key: "assignment_date", label: "Date" },
     { key: "headman_name", label: "Headman" },
     { key: "field_code", label: "Field Code" },
@@ -48,8 +48,8 @@ const HarvestList = () => {
     { key: "actual_tonnage", label: "Actual Tons", render: (value) => value ? formatTons(value) : '-' },
     { 
       key: "tonnage_diff", 
-      label: "Tonnage Diff",
-      render: (value, row) => {
+      label: "Diff",
+      render: (_, row) => {
         if (row.actual_tonnage) {
           const diff = row.actual_tonnage - row.expected_tonnage;
           if (diff > 0) return <span className="text-green-600">↑ {formatTons(diff)}</span>;
@@ -69,19 +69,21 @@ const HarvestList = () => {
       label: "Actions",
       render: (_, row) => (
         <div className="flex gap-2">
-          <Button variant="ghost" size="sm" onClick={() => console.log('View', row.id)}>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => handleView(row.id)}
+            className="text-blue-600 hover:text-blue-800"
+          >
             <Eye className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => handleEdit(row)}>
-            <Edit className="h-4 w-4" />
           </Button>
           <ConfirmDialog
             title="Delete Assignment"
             description="Are you sure you want to delete this harvest assignment? This action cannot be undone."
             onConfirm={() => deleteMutation.mutate(row.id)}
             trigger={
-              <Button variant="ghost" size="sm">
-                <Trash2 className="h-4 w-4 text-red-600" />
+              <Button variant="ghost" size="sm" className="text-red-600">
+                <Trash2 className="h-4 w-4" />
               </Button>
             }
           />
@@ -94,7 +96,7 @@ const HarvestList = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-gray-900">Harvest Assignments</h2>
-        <Button onClick={() => { setEditingAssignment(null); setIsFormOpen(true); }} className="bg-primary text-white">
+        <Button onClick={() => setIsFormOpen(true)} className="bg-primary text-white">
           <Plus className="h-4 w-4 mr-2" />
           New Assignment
         </Button>
@@ -102,7 +104,7 @@ const HarvestList = () => {
 
       {/* Filters */}
       <div className="bg-white rounded-lg shadow p-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
             <input
@@ -133,14 +135,13 @@ const HarvestList = () => {
         columns={columns}
         data={assignments?.data || []}
         loading={isLoading}
-        emptyMessage="No harvest assignments found"
+        emptyMessage="No harvest assignments found. Click 'New Assignment' to create one."
       />
 
       {/* Harvest Form Modal */}
       <HarvestForm 
         isOpen={isFormOpen} 
-        onClose={() => { setIsFormOpen(false); setEditingAssignment(null); }}
-        assignment={editingAssignment}
+        onClose={() => setIsFormOpen(false)}
       />
     </div>
   );

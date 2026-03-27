@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
+import { Truck } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
@@ -42,6 +43,7 @@ const loadingSchema = z.object({
 const LoadingForm = ({ isOpen, onClose, record = null }) => {
   const queryClient = useQueryClient();
   const [selectedAssignment, setSelectedAssignment] = useState(null);
+  const [maxLoadableTons, setMaxLoadableTons] = useState(0);
 
   const { data: weighbridges } = useQuery({
     queryKey: ['weighbridges'],
@@ -55,9 +57,10 @@ const LoadingForm = ({ isOpen, onClose, record = null }) => {
     enabled: isOpen,
   });
 
+  // Get only completed harvest assignments for loading
   const { data: assignments } = useQuery({
     queryKey: ['harvest-assignments-for-loading'],
-    queryFn: () => getHarvestAssignments({ status: 'in_progress,completed' }),
+    queryFn: () => getHarvestAssignments({ status: 'completed' }),
     enabled: isOpen,
   });
 
@@ -76,16 +79,29 @@ const LoadingForm = ({ isOpen, onClose, record = null }) => {
   });
 
   const watchAssignmentId = watch('assignment_id');
+  const watchTonsLoaded = watch('tons_loaded');
 
   // Load assignment details when selected
   useEffect(() => {
     if (watchAssignmentId && assignments?.data) {
       const assignment = assignments.data.find(a => a.id.toString() === watchAssignmentId);
       setSelectedAssignment(assignment);
+      if (assignment) {
+        const remainingTons = (assignment.actual_tonnage || assignment.expected_tonnage) - (assignment.loaded_tonnage || 0);
+        setMaxLoadableTons(Math.max(0, remainingTons));
+      }
     } else {
       setSelectedAssignment(null);
+      setMaxLoadableTons(0);
     }
   }, [watchAssignmentId, assignments]);
+
+  // Validate tons loaded doesn't exceed available
+  useEffect(() => {
+    if (watchTonsLoaded > maxLoadableTons && maxLoadableTons > 0) {
+      toast.warning(`Maximum loadable tons is ${formatTons(maxLoadableTons)}`);
+    }
+  }, [watchTonsLoaded, maxLoadableTons]);
 
   const createMutation = useMutation({
     mutationFn: createLoadingRecord,
@@ -94,6 +110,7 @@ const LoadingForm = ({ isOpen, onClose, record = null }) => {
       // Compute financials automatically
       await computeLoadingFinancials(response.data.id);
       queryClient.invalidateQueries(['loading-records']);
+      queryClient.invalidateQueries(['harvest-assignments']); // Refresh to update loaded tonnage
       onClose();
       reset();
     },
@@ -118,6 +135,11 @@ const LoadingForm = ({ isOpen, onClose, record = null }) => {
   });
 
   const onSubmit = (data) => {
+    if (parseFloat(data.tons_loaded) > maxLoadableTons && maxLoadableTons > 0) {
+      toast.error(`Cannot load more than ${formatTons(maxLoadableTons)} for this assignment`);
+      return;
+    }
+
     const formattedData = {
       assignment_id: parseInt(data.assignment_id),
       weighbridge_id: parseInt(data.weighbridge_id),
@@ -142,26 +164,32 @@ const LoadingForm = ({ isOpen, onClose, record = null }) => {
         <DialogHeader>
           <DialogTitle>{record ? 'Edit Loading Record' : 'New Loading Record'}</DialogTitle>
           <DialogDescription>
-            {record ? 'Update loading record details' : 'Create a new loading record'}
+            {record ? 'Update loading record details' : 'Record loading from completed harvest assignments'}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
-            <Label htmlFor="assignment_id">Harvest Assignment</Label>
+            <Label htmlFor="assignment_id">Completed Harvest Assignment</Label>
             <Select
               value={watch('assignment_id')}
               onValueChange={(value) => setValue('assignment_id', value)}
             >
               <SelectTrigger className="mt-1">
-                <SelectValue placeholder="Select harvest assignment" />
+                <SelectValue placeholder="Select completed harvest assignment" />
               </SelectTrigger>
               <SelectContent>
-                {assignments?.data?.map((assignment) => (
-                  <SelectItem key={assignment.id} value={assignment.id.toString()}>
-                    {assignment.field_code} - {assignment.outgrower_name} ({formatTons(assignment.expected_tonnage)})
-                  </SelectItem>
-                ))}
+                {assignments?.data?.map((assignment) => {
+                  const loadedTons = assignment.loaded_tonnage || 0;
+                  const totalTons = assignment.actual_tonnage || assignment.expected_tonnage;
+                  const remaining = totalTons - loadedTons;
+                  return (
+                    <SelectItem key={assignment.id} value={assignment.id.toString()}>
+                      {assignment.field_code} - {assignment.outgrower_name} 
+                      ({formatTons(loadedTons)}/{formatTons(totalTons)} T loaded)
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
             {errors.assignment_id && (
@@ -170,11 +198,15 @@ const LoadingForm = ({ isOpen, onClose, record = null }) => {
           </div>
 
           {selectedAssignment && (
-            <div className="bg-gray-50 p-3 rounded-lg text-sm">
+            <div className="bg-gray-50 p-3 rounded-lg text-sm space-y-1">
               <p><strong>Outgrower:</strong> {selectedAssignment.outgrower_name}</p>
               <p><strong>Headman:</strong> {selectedAssignment.headman_name}</p>
-              <p><strong>Expected Tons:</strong> {formatTons(selectedAssignment.expected_tonnage)}</p>
-              <p><strong>Actual Tons:</strong> {selectedAssignment.actual_tonnage ? formatTons(selectedAssignment.actual_tonnage) : 'Not recorded'}</p>
+              <p><strong>Total Harvested:</strong> {formatTons(selectedAssignment.actual_tonnage || selectedAssignment.expected_tonnage)}</p>
+              <p><strong>Already Loaded:</strong> {formatTons(selectedAssignment.loaded_tonnage || 0)}</p>
+              <p className="text-green-600 font-medium">
+                <Truck className="h-3 w-3 inline mr-1" />
+                Available for Loading: {formatTons(maxLoadableTons)}
+              </p>
             </div>
           )}
 

@@ -23,6 +23,7 @@ import Outgrowers from './pages/setup/Outgrowers';
 import Weighbridges from './pages/setup/Weighbridges';
 import DistanceBands from './pages/setup/DistanceBands';
 import RateConfig from './pages/setup/RateConfig';
+import HarvestDetail from './pages/harvesting/HarvestDetail';
 
 const queryClient = new QueryClient();
 
@@ -55,6 +56,7 @@ function App() {
                 <Route path="/setup/weighbridges" element={<Weighbridges />} />
                 <Route path="/setup/distance-bands" element={<DistanceBands />} />
                 <Route path="/setup/rate-config" element={<RateConfig />} />
+                <Route path="/harvesting/:id" element={<HarvestDetail />} />
               </Routes>
             </main>
           </div>

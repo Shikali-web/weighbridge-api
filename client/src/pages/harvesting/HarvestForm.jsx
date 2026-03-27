@@ -25,7 +25,7 @@ import {
   DialogTitle,
 } from '../../components/ui/dialog';
 import { getHeadmen, getOutgrowers } from '../../api/setup';
-import { createHarvestAssignment, updateHarvestAssignment } from '../../api/harvest';
+import { createHarvestAssignment } from '../../api/harvest';
 
 const harvestSchema = z.object({
   headman_id: z.string().min(1, 'Headman is required'),
@@ -33,10 +33,9 @@ const harvestSchema = z.object({
   assignment_date: z.string().min(1, 'Assignment date is required'),
   turnup: z.number().min(0.1, 'Turnup must be greater than 0'),
   notes: z.string().optional(),
-  status: z.string().default('pending'),
 });
 
-const HarvestForm = ({ isOpen, onClose, assignment = null }) => {
+const HarvestForm = ({ isOpen, onClose }) => {
   const queryClient = useQueryClient();
   const [selectedOutgrower, setSelectedOutgrower] = useState(null);
   const [expectedTonnage, setExpectedTonnage] = useState(null);
@@ -56,12 +55,11 @@ const HarvestForm = ({ isOpen, onClose, assignment = null }) => {
   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm({
     resolver: zodResolver(harvestSchema),
     defaultValues: {
-      headman_id: assignment?.headman_id?.toString() || '',
-      outgrower_id: assignment?.outgrower_id?.toString() || '',
-      assignment_date: assignment?.assignment_date?.split('T')[0] || new Date().toISOString().split('T')[0],
-      turnup: assignment?.turnup || '',
-      notes: assignment?.notes || '',
-      status: assignment?.status || 'pending',
+      headman_id: '',
+      outgrower_id: '',
+      assignment_date: new Date().toISOString().split('T')[0],
+      turnup: '',
+      notes: '',
     }
   });
 
@@ -93,22 +91,11 @@ const HarvestForm = ({ isOpen, onClose, assignment = null }) => {
       queryClient.invalidateQueries(['harvest-assignments']);
       onClose();
       reset();
+      setExpectedTonnage(null);
+      setSelectedOutgrower(null);
     },
     onError: (error) => {
       toast.error(error.message || 'Failed to create harvest assignment');
-    }
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }) => updateHarvestAssignment(id, data),
-    onSuccess: () => {
-      toast.success('Harvest assignment updated successfully');
-      queryClient.invalidateQueries(['harvest-assignments']);
-      onClose();
-      reset();
-    },
-    onError: (error) => {
-      toast.error(error.message || 'Failed to update harvest assignment');
     }
   });
 
@@ -118,25 +105,20 @@ const HarvestForm = ({ isOpen, onClose, assignment = null }) => {
       outgrower_id: parseInt(data.outgrower_id),
       assignment_date: data.assignment_date,
       turnup: parseFloat(data.turnup),
-      expected_tonnage: expectedTonnage || parseFloat(data.turnup) * 2.25,
+      expected_tonnage: expectedTonnage,
       notes: data.notes,
-      status: data.status,
+      status: 'pending',
     };
-
-    if (assignment) {
-      updateMutation.mutate({ id: assignment.id, data: formattedData });
-    } else {
-      createMutation.mutate(formattedData);
-    }
+    createMutation.mutate(formattedData);
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{assignment ? 'Edit Harvest Assignment' : 'New Harvest Assignment'}</DialogTitle>
+          <DialogTitle>New Harvest Assignment</DialogTitle>
           <DialogDescription>
-            {assignment ? 'Update harvest assignment details' : 'Create a new harvest assignment'}
+            Record the turnup to create a harvest assignment. Status will be automatically set to Pending.
           </DialogDescription>
         </DialogHeader>
 
@@ -153,7 +135,7 @@ const HarvestForm = ({ isOpen, onClose, assignment = null }) => {
               <SelectContent>
                 {headmen?.data?.map((headman) => (
                   <SelectItem key={headman.id} value={headman.id.toString()}>
-                    {headman.name} - {headman.phone}
+                    {headman.name} {headman.phone ? `- ${headman.phone}` : ''}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -208,7 +190,7 @@ const HarvestForm = ({ isOpen, onClose, assignment = null }) => {
           </div>
 
           <div>
-            <Label htmlFor="turnup">Turnup (Cane bundles)</Label>
+            <Label htmlFor="turnup">Turnup </Label>
             <Input
               id="turnup"
               type="number"
@@ -248,8 +230,8 @@ const HarvestForm = ({ isOpen, onClose, assignment = null }) => {
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" className="bg-primary text-white" disabled={createMutation.isLoading || updateMutation.isLoading}>
-              {createMutation.isLoading || updateMutation.isLoading ? 'Saving...' : (assignment ? 'Update' : 'Create')}
+            <Button type="submit" className="bg-primary text-white" disabled={createMutation.isLoading}>
+              {createMutation.isLoading ? 'Creating...' : 'Create Assignment'}
             </Button>
           </DialogFooter>
         </form>
