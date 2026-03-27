@@ -2,25 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
+import { getWeekDates, getISOWeek } from '../../utils/formatters';
 
 const WeekPicker = ({ week, year, onWeekChange, onDateRangeChange }) => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  
-  const getWeekDates = (weekNum, yearNum) => {
-    const simple = new Date(yearNum, 0, 1 + (weekNum - 1) * 7);
-    const dayOfWeek = simple.getDay();
-    const monday = new Date(simple);
-    monday.setDate(simple.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1));
-    const sunday = new Date(monday);
-    sunday.setDate(monday.getDate() + 6);
-    
-    return {
-      start: monday,
-      end: sunday,
-      formatted: `${monday.toLocaleDateString('en-KE', { month: 'short', day: 'numeric', year: 'numeric' })} - ${sunday.toLocaleDateString('en-KE', { month: 'short', day: 'numeric', year: 'numeric' })}`
-    };
-  };
   
   useEffect(() => {
     const dates = getWeekDates(week, year);
@@ -88,48 +74,10 @@ const WeekPicker = ({ week, year, onWeekChange, onDateRangeChange }) => {
             <Calendar className="h-4 w-4" />
             <span>Week {week} — {weekDates.formatted}</span>
           </div>
-          
-          <div className="flex gap-2">
-            <Input
-              type="date"
-              value={startDate}
-              onChange={(e) => {
-                setStartDate(e.target.value);
-                // Calculate week from selected date
-                const date = new Date(e.target.value);
-                const newWeek = getWeekNumber(date);
-                const newYear = date.getFullYear();
-                onWeekChange(newWeek, newYear);
-              }}
-              className="w-36"
-            />
-            <span className="text-gray-500">to</span>
-            <Input
-              type="date"
-              value={endDate}
-              onChange={(e) => {
-                setEndDate(e.target.value);
-                const date = new Date(e.target.value);
-                const newWeek = getWeekNumber(date);
-                const newYear = date.getFullYear();
-                onWeekChange(newWeek, newYear);
-              }}
-              className="w-36"
-            />
-          </div>
         </div>
       </div>
     </div>
   );
 };
-
-// Helper function to get week number from date
-function getWeekNumber(date) {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
-  const week1 = new Date(d.getFullYear(), 0, 4);
-  return 1 + Math.round(((d - week1) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
-}
 
 export default WeekPicker;

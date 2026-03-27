@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Edit, Trash2, Eye } from 'lucide-react';
+import { Plus, Search, Trash2, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 import DataTable from '../../components/shared/DataTable';
 import StatusBadge from '../../components/shared/StatusBadge';
@@ -9,7 +9,7 @@ import ConfirmDialog from '../../components/shared/ConfirmDialog';
 import { Button } from '../../components/ui/button';
 import HarvestForm from './HarvestForm';
 import { getHarvestAssignments, deleteHarvestAssignment } from '../../api/harvest';
-import { formatCurrency, formatTons } from '../../utils/formatters';
+import { formatTons } from '../../utils/formatters';
 
 const HarvestList = () => {
   const navigate = useNavigate();
@@ -18,7 +18,7 @@ const HarvestList = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const queryClient = useQueryClient();
 
-  const { data: assignments, isLoading } = useQuery({
+  const { data: assignments, isLoading, refetch } = useQuery({
     queryKey: ['harvest-assignments', searchTerm, statusFilter],
     queryFn: () => getHarvestAssignments({ search: searchTerm, status: statusFilter })
   });
@@ -40,27 +40,32 @@ const HarvestList = () => {
 
   const columns = [
     { key: "id", label: "ID" },
-    { key: "assignment_date", label: "Date" },
+    { 
+      key: "assignment_date", 
+      label: "Date",
+      render: (value) => new Date(value).toLocaleDateString()
+    },
     { key: "headman_name", label: "Headman" },
     { key: "field_code", label: "Field Code" },
     { key: "turnup", label: "Turnup" },
     { key: "expected_tonnage", label: "Expected Tons", render: (value) => formatTons(value) },
-    { key: "actual_tonnage", label: "Actual Tons", render: (value) => value ? formatTons(value) : '-' },
     { 
-      key: "tonnage_diff", 
+      key: "actual_tonnage", 
+      label: "Actual Tons", 
+      render: (value) => value ? formatTons(value) : formatTons(0)
+    },
+    { 
+      key: "tonnage_difference", 
       label: "Diff",
-      render: (_, row) => {
-        if (row.actual_tonnage) {
-          const diff = row.actual_tonnage - row.expected_tonnage;
-          if (diff > 0) return <span className="text-green-600">↑ {formatTons(diff)}</span>;
-          if (diff < 0) return <span className="text-red-600">↓ {formatTons(Math.abs(diff))}</span>;
-          return formatTons(0);
-        }
-        return '-';
+      render: (value, row) => {
+        const diff = row.actual_tonnage - row.expected_tonnage;
+        if (diff > 0) return <span className="text-green-600">↑ {formatTons(diff)}</span>;
+        if (diff < 0) return <span className="text-red-600">↓ {formatTons(Math.abs(diff))}</span>;
+        return formatTons(0);
       }
     },
     { 
-      key: "status", 
+      key: "computed_status", 
       label: "Status",
       render: (value) => <StatusBadge status={value} />
     },

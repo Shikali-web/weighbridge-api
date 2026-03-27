@@ -306,4 +306,62 @@ router.delete('/:id', async (req, res, next) => {
   }
 });
 
+// Get all harvest assignments (using view)
+router.get('/', async (req, res, next) => {
+  try {
+    const { search, status, week, year, limit } = req.query;
+    let query = `
+      SELECT hawt.*, 
+             o.name as outgrower_name, o.field_code, o.field_size_ha,
+             h.name as headman_name,
+             COALESCE(hf.factory_revenue, 0) as total_revenue,
+             COALESCE(hf.final_headman_payment, 0) as headman_share,
+             COALESCE(hf.final_sagib_net, 0) as sagib_net
+      FROM harvest_assignments_with_totals hawt
+      LEFT JOIN outgrowers o ON hawt.outgrower_id = o.id
+      LEFT JOIN headmen h ON hawt.headman_id = h.id
+      LEFT JOIN harvest_financials hf ON hawt.id = hf.assignment_id
+      WHERE 1=1
+    `;
+    let params = [];
+    let paramIndex = 1;
+    
+    if (search) {
+      query += ` AND (o.name ILIKE $${paramIndex} OR o.field_code ILIKE $${paramIndex})`;
+      params.push(`%${search}%`);
+      paramIndex++;
+    }
+    
+    if (status) {
+      query += ` AND hawt.computed_status = $${paramIndex}`;
+      params.push(status);
+      paramIndex++;
+    }
+    
+    if (week) {
+      query += ` AND hawt.week_number = $${paramIndex}`;
+      params.push(week);
+      paramIndex++;
+    }
+    
+    if (year) {
+      query += ` AND hawt.year = $${paramIndex}`;
+      params.push(year);
+      paramIndex++;
+    }
+    
+    query += ' ORDER BY hawt.assignment_date DESC';
+    
+    if (limit) {
+      query += ` LIMIT $${paramIndex}`;
+      params.push(limit);
+    }
+    
+    const result = await pool.query(query, params);
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    console.error('Error in GET /harvest-assignments:', err);
+    next(err);
+  }
+});
 module.exports = router;
