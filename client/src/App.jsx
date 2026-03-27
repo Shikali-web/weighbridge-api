@@ -27,6 +27,9 @@ import HarvestDetail from './pages/harvesting/HarvestDetail';
 import HeadmanPayrollDetails from './pages/payroll/HeadmanPayrollDetails';
 import SupervisorPayrollDetails from './pages/payroll/SupervisorPayrollDetails';
 import DriverPayrollDetails from './pages/payroll/DriverPayrollDetails';
+import HeadmanPerformanceTest from './pages/reports/HeadmanPerformanceTest';
+import HeadmanHarvestReport from './pages/reports/HeadmanHarvestReport';
+import SupervisorLoadingReport from './pages/reports/SupervisorLoadingReport';
 
 const queryClient = new QueryClient();
 
@@ -51,7 +54,7 @@ function App() {
                 <Route path="/reports/weekly" element={<WeeklyReturns />} />
                 <Route path="/reports/headman" element={<HeadmanPerformance />} />
                 <Route path="/reports/supervisor" element={<SupervisorPerformance />} />
-                <Route path="/reports/driver" element={<DriverPerformance />} />
+                <Route path="/reports/driver-performance" element={<DriverPerformance />} />
                 <Route path="/setup/supervisors" element={<Supervisors />} />
                 <Route path="/setup/headmen" element={<Headmen />} />
                 <Route path="/setup/drivers" element={<DriversTrucks />} />
@@ -63,6 +66,9 @@ function App() {
                 <Route path="/payroll/headman-details/:headmanId" element={<HeadmanPayrollDetails />} />
                 <Route path="/payroll/supervisor-details/:supervisorId" element={<SupervisorPayrollDetails />} />
                 <Route path="/payroll/driver-details/:driverId" element={<DriverPayrollDetails />} />
+                <Route path="/reports/headman-test" element={<HeadmanPerformanceTest />} />
+              <Route path="/reports/headman-harvest" element={<HeadmanHarvestReport />} />
+              <Route path="/reports/supervisor-loading" element={<SupervisorLoadingReport />} />
               </Routes>
             </main>
           </div>

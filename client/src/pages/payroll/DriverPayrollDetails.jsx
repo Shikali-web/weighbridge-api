@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Truck, DollarSign, User, FileText, MapPin } from 'lucide-react';
+import { ArrowLeft, Truck, DollarSign, User, FileText, MapPin, Loader2 } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { formatCurrency, formatTons } from '../../utils/formatters';
 import DataTable from '../../components/shared/DataTable';
@@ -46,7 +46,7 @@ const DriverPayrollDetails = () => {
   }, [trips]);
 
   const columns = [
-    { key: "trip_date", label: "Date", render: (v) => new Date(v).toLocaleDateString() },
+    { key: "trip_date", label: "Date", render: (v) => v ? new Date(v).toLocaleDateString() : 'N/A' },
     { key: "plate_no", label: "Truck" },
     { key: "outgrower_name", label: "Outgrower" },
     { key: "band_code", label: "Band" },
@@ -67,44 +67,53 @@ const DriverPayrollDetails = () => {
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="flex items-center gap-2 text-gray-500 mb-2">
-            <Truck className="h-4 w-4" />
-            <span className="text-sm">Total Trips</span>
-          </div>
-          <p className="text-2xl font-bold">{summary.total_trips}</p>
+      {isLoading ? (
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <span className="ml-2 text-gray-500">Loading details...</span>
         </div>
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="flex items-center gap-2 text-gray-500 mb-2">
-            <Truck className="h-4 w-4" />
-            <span className="text-sm">Total Tons</span>
+      ) : (
+        <>
+          {/* Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-white rounded-lg shadow p-4">
+              <div className="flex items-center gap-2 text-gray-500 mb-2">
+                <Truck className="h-4 w-4" />
+                <span className="text-sm">Total Trips</span>
+              </div>
+              <p className="text-2xl font-bold">{summary.total_trips}</p>
+            </div>
+            <div className="bg-white rounded-lg shadow p-4">
+              <div className="flex items-center gap-2 text-gray-500 mb-2">
+                <Truck className="h-4 w-4" />
+                <span className="text-sm">Total Tons</span>
+              </div>
+              <p className="text-2xl font-bold text-green-600">{formatTons(summary.total_tons)}</p>
+            </div>
+            <div className="bg-white rounded-lg shadow p-4">
+              <div className="flex items-center gap-2 text-gray-500 mb-2">
+                <DollarSign className="h-4 w-4" />
+                <span className="text-sm">Total Payment</span>
+              </div>
+              <p className="text-2xl font-bold text-primary">{formatCurrency(summary.total_payment)}</p>
+            </div>
           </div>
-          <p className="text-2xl font-bold text-green-600">{formatTons(summary.total_tons)}</p>
-        </div>
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="flex items-center gap-2 text-gray-500 mb-2">
-            <DollarSign className="h-4 w-4" />
-            <span className="text-sm">Total Payment</span>
-          </div>
-          <p className="text-2xl font-bold text-primary">{formatCurrency(summary.total_payment)}</p>
-        </div>
-      </div>
 
-      {/* Transport Trips Section */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-          <MapPin className="h-5 w-5 text-primary" />
-          Transport Trips
-        </h3>
-        <DataTable
-          columns={columns}
-          data={transportData}
-          loading={isLoading}
-          emptyMessage="No transport trips for this week"
-        />
-      </div>
+          {/* Transport Trips Section */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <MapPin className="h-5 w-5 text-primary" />
+              Transport Trips
+            </h3>
+            <DataTable
+              columns={columns}
+              data={transportData}
+              loading={isLoading}
+              emptyMessage="No transport trips for this week"
+            />
+          </div>
+        </>
+      )}
     </div>
   );
 };

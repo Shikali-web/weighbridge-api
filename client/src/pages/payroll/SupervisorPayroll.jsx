@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Download, CheckCircle } from 'lucide-react';
+import { Download, CheckCircle, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 import WeekPicker from '../../components/shared/WeekPicker';
 import DataTable from '../../components/shared/DataTable';
@@ -11,14 +12,17 @@ import { getSupervisorPayroll, generateSupervisorPayroll, markSupervisorPaid } f
 import { formatCurrency, formatTons, getISOWeek } from '../../utils/formatters';
 
 const SupervisorPayroll = () => {
+  const navigate = useNavigate();
   const currentDate = new Date();
   const [week, setWeek] = useState(getISOWeek(currentDate));
   const [year, setYear] = useState(currentDate.getFullYear());
+  const [isGenerating, setIsGenerating] = useState(false);
   const queryClient = useQueryClient();
 
-  const { data: payroll, isLoading } = useQuery({
+  const { data: payroll, isLoading, refetch } = useQuery({
     queryKey: ['supervisor-payroll', week, year],
-    queryFn: () => getSupervisorPayroll(week, year)
+    queryFn: () => getSupervisorPayroll(week, year),
+    enabled: true,
   });
 
   const generateMutation = useMutation({
@@ -26,6 +30,7 @@ const SupervisorPayroll = () => {
     onSuccess: () => {
       toast.success('Supervisor payroll generated successfully');
       queryClient.invalidateQueries(['supervisor-payroll']);
+      refetch();
     },
     onError: (error) => {
       toast.error(error.message || 'Failed to generate payroll');
@@ -43,50 +48,76 @@ const SupervisorPayroll = () => {
     }
   });
 
+  const handleGeneratePayroll = async () => {
+    setIsGenerating(true);
+    try {
+      await generateMutation.mutateAsync();
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   const handleWeekChange = (newWeek, newYear) => {
     setWeek(newWeek);
     setYear(newYear);
   };
 
+  const handleViewDetails = (supervisorId, supervisorName) => {
+    navigate(`/payroll/supervisor-details/${supervisorId}?week=${week}&year=${year}&name=${encodeURIComponent(supervisorName)}`);
+  };
+
   const payrollData = payroll?.data || [];
-  const totalPayroll = payrollData.reduce((sum, item) => sum + (item.weekly_pay || 0), 0);
-  const paidCount = payrollData.filter(item => item.payment_status === 'paid').length;
-  const unpaidCount = payrollData.length - paidCount;
+  
+  // Calculate totals - parse values properly
+  const totalPayroll = payrollData.reduce((sum, item) => sum + (parseFloat(item.weekly_pay) || 0), 0);
+  const paidCount = payrollData.filter(item => item.is_paid === true).length;
+  const unpaidCount = payrollData.filter(item => item.is_paid !== true).length;
   const totalOutstanding = payrollData
-    .filter(item => item.payment_status !== 'paid')
-    .reduce((sum, item) => sum + (item.weekly_pay || 0), 0);
+    .filter(item => item.is_paid !== true)
+    .reduce((sum, item) => sum + (parseFloat(item.weekly_pay) || 0), 0);
 
   const columns = [
-    { key: "supervisor_name", label: "Supervisor Name" },
-    { key: "total_trips", label: "Total Trips" },
-    { key: "total_tons", label: "Total Tons", render: (value) => formatTons(value) },
-    { key: "weekly_pay", label: "Weekly Pay", render: (value) => formatCurrency(value) },
+    { key: "supervisor_name", label: "Supervisor Name", render: (v) => v || 'N/A' },
+    { key: "total_trips", label: "Total Trips", render: (v) => v || 0 },
+    { key: "total_tons", label: "Total Tons", render: (v) => formatTons(parseFloat(v) || 0) },
+    { key: "weekly_pay", label: "Weekly Pay", render: (v) => formatCurrency(parseFloat(v) || 0) },
     { 
-      key: "payment_status", 
+      key: "is_paid", 
       label: "Paid Status",
-      render: (value) => <StatusBadge status={value} />
+      render: (value) => <StatusBadge status={value ? 'paid' : 'unpaid'} />
     },
     {
       key: "actions",
       label: "Action",
       render: (_, row) => (
-        row.payment_status === 'paid' ? (
-          <Button variant="ghost" size="sm" disabled className="text-green-600">
-            <CheckCircle className="h-4 w-4 mr-1" />
-            Paid ✓
+        <div className="flex gap-2">
+          {!row.is_paid ? (
+            <ConfirmDialog
+              title="Mark as Paid"
+              description={`Are you sure you want to mark ${row.supervisor_name}'s payroll as paid?`}
+              onConfirm={() => markPaidMutation.mutate(row.supervisor_id)}
+              trigger={
+                <Button variant="outline" size="sm" className="text-green-600 border-green-600">
+                  Mark Paid
+                </Button>
+              }
+            />
+          ) : (
+            <Button variant="ghost" size="sm" disabled className="text-green-600">
+              <CheckCircle className="h-4 w-4 mr-1" />
+              Paid ✓
+            </Button>
+          )}
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => handleViewDetails(row.supervisor_id, row.supervisor_name)}
+            className="text-blue-600"
+          >
+            <Eye className="h-4 w-4 mr-1" />
+            Details
           </Button>
-        ) : (
-          <ConfirmDialog
-            title="Mark as Paid"
-            description={`Are you sure you want to mark ${row.supervisor_name}'s payroll as paid?`}
-            onConfirm={() => markPaidMutation.mutate(row.id)}
-            trigger={
-              <Button variant="outline" size="sm" className="text-green-600 border-green-600">
-                Mark Paid
-              </Button>
-            }
-          />
-        )
+        </div>
       )
     }
   ];
@@ -94,14 +125,17 @@ const SupervisorPayroll = () => {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-900">Supervisor Payroll</h2>
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Supervisor Payroll</h2>
+          <p className="text-sm text-gray-500 mt-1">Payments are processed on Thursdays</p>
+        </div>
         <Button 
-          onClick={() => generateMutation.mutate()}
-          disabled={generateMutation.isLoading}
+          onClick={handleGeneratePayroll}
+          disabled={isGenerating}
           className="bg-primary text-white"
         >
           <Download className="h-4 w-4 mr-2" />
-          Generate Payroll
+          {isGenerating ? 'Generating...' : 'Generate Payroll'}
         </Button>
       </div>
 
@@ -130,7 +164,7 @@ const SupervisorPayroll = () => {
         columns={columns}
         data={payrollData}
         loading={isLoading}
-        emptyMessage="No supervisor payroll data found for this week"
+        emptyMessage="No supervisor payroll data found for this week. Click 'Generate Payroll' to create."
       />
     </div>
   );

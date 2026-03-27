@@ -19,14 +19,13 @@ import {
   DialogTitle,
 } from '../../components/ui/dialog';
 import { getDistanceBands, createDistanceBand, updateDistanceBand, deleteDistanceBand } from '../../api/setup';
+import { formatCurrency } from '../../utils/formatters';
 
 const distanceBandSchema = z.object({
   band_code: z.string().min(1, 'Band code is required'),
   min_km: z.number().min(0, 'Min km must be 0 or greater'),
   max_km: z.number().min(0, 'Max km must be greater than min km'),
   transport_rate_per_ton: z.number().min(0, 'Transport rate must be 0 or greater'),
-  driver_rate_per_ton: z.number().min(0, 'Driver rate must be 0 or greater'),
-  sagib_retention_per_ton: z.number().min(0, 'Sagib retention must be 0 or greater'),
 }).refine((data) => data.max_km > data.min_km, {
   message: "Max km must be greater than min km",
   path: ["max_km"],
@@ -50,10 +49,14 @@ const DistanceBands = () => {
       min_km: '',
       max_km: '',
       transport_rate_per_ton: '',
-      driver_rate_per_ton: '',
-      sagib_retention_per_ton: '',
     }
   });
+
+  const watchTransportRate = watch('transport_rate_per_ton');
+
+  // Calculate derived values (40% for driver, 60% for Sagib)
+  const driverRate = watchTransportRate ? parseFloat(watchTransportRate) * 0.4 : 0;
+  const sagibRate = watchTransportRate ? parseFloat(watchTransportRate) * 0.6 : 0;
 
   const createMutation = useMutation({
     mutationFn: createDistanceBand,
@@ -64,6 +67,7 @@ const DistanceBands = () => {
       reset();
     },
     onError: (error) => {
+      console.error('Create error:', error);
       toast.error(error.message || 'Failed to create distance band');
     }
   });
@@ -78,6 +82,7 @@ const DistanceBands = () => {
       reset();
     },
     onError: (error) => {
+      console.error('Update error:', error);
       toast.error(error.message || 'Failed to update distance band');
     }
   });
@@ -89,18 +94,17 @@ const DistanceBands = () => {
       queryClient.invalidateQueries(['distance-bands']);
     },
     onError: (error) => {
+      console.error('Delete error:', error);
       toast.error(error.message || 'Failed to delete distance band');
     }
   });
 
   const onSubmit = (data) => {
     const formattedData = {
-      ...data,
+      band_code: data.band_code,
       min_km: parseFloat(data.min_km),
       max_km: parseFloat(data.max_km),
       transport_rate_per_ton: parseFloat(data.transport_rate_per_ton),
-      driver_rate_per_ton: parseFloat(data.driver_rate_per_ton),
-      sagib_retention_per_ton: parseFloat(data.sagib_retention_per_ton),
     };
     
     if (editingBand) {
@@ -116,8 +120,6 @@ const DistanceBands = () => {
     setValue('min_km', band.min_km);
     setValue('max_km', band.max_km);
     setValue('transport_rate_per_ton', band.transport_rate_per_ton);
-    setValue('driver_rate_per_ton', band.driver_rate_per_ton);
-    setValue('sagib_retention_per_ton', band.sagib_retention_per_ton);
     setIsModalOpen(true);
   };
 
@@ -131,9 +133,9 @@ const DistanceBands = () => {
     { key: "band_code", label: "Band Code" },
     { key: "min_km", label: "Min (km)" },
     { key: "max_km", label: "Max (km)" },
-    { key: "transport_rate_per_ton", label: "Transport Rate (KES/ton)" },
-    { key: "driver_rate_per_ton", label: "Driver Rate (KES/ton)" },
-    { key: "sagib_retention_per_ton", label: "Sagib Retention (KES/ton)" },
+    { key: "transport_rate_per_ton", label: "Transport Rate (KES/ton)", render: (v) => formatCurrency(v) },
+    { key: "driver_rate_per_ton", label: "Driver Rate (KES/ton)", render: (v) => formatCurrency(v || 0) },
+    { key: "sagib_rate_per_ton", label: "Sagib Retention (KES/ton)", render: (v) => formatCurrency(v || 0) },
     {
       key: "actions",
       label: "Actions",
@@ -200,11 +202,11 @@ const DistanceBands = () => {
           
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div>
-              <Label htmlFor="band_code">Band Code</Label>
+              <Label htmlFor="band_code">Band Code *</Label>
               <Input
                 id="band_code"
                 {...register('band_code')}
-                placeholder="e.g., BAND-A, BAND-1"
+                placeholder="e.g., A, B, C"
                 className="mt-1"
               />
               {errors.band_code && (
@@ -214,7 +216,7 @@ const DistanceBands = () => {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="min_km">Min Distance (km)</Label>
+                <Label htmlFor="min_km">Min Distance (km) *</Label>
                 <Input
                   id="min_km"
                   type="number"
@@ -229,7 +231,7 @@ const DistanceBands = () => {
               </div>
 
               <div>
-                <Label htmlFor="max_km">Max Distance (km)</Label>
+                <Label htmlFor="max_km">Max Distance (km) *</Label>
                 <Input
                   id="max_km"
                   type="number"
@@ -245,7 +247,7 @@ const DistanceBands = () => {
             </div>
 
             <div>
-              <Label htmlFor="transport_rate_per_ton">Transport Rate (KES/ton)</Label>
+              <Label htmlFor="transport_rate_per_ton">Transport Rate (KES/ton) *</Label>
               <Input
                 id="transport_rate_per_ton"
                 type="number"
@@ -259,42 +261,30 @@ const DistanceBands = () => {
               )}
             </div>
 
-            <div>
-              <Label htmlFor="driver_rate_per_ton">Driver Rate (KES/ton)</Label>
-              <Input
-                id="driver_rate_per_ton"
-                type="number"
-                step="0.01"
-                {...register('driver_rate_per_ton', { valueAsNumber: true })}
-                placeholder="Enter driver rate per ton"
-                className="mt-1"
-              />
-              {errors.driver_rate_per_ton && (
-                <p className="text-red-500 text-sm mt-1">{errors.driver_rate_per_ton.message}</p>
-              )}
-            </div>
-
-            <div>
-              <Label htmlFor="sagib_retention_per_ton">Sagib Retention (KES/ton)</Label>
-              <Input
-                id="sagib_retention_per_ton"
-                type="number"
-                step="0.01"
-                {...register('sagib_retention_per_ton', { valueAsNumber: true })}
-                placeholder="Enter Sagib retention per ton"
-                className="mt-1"
-              />
-              {errors.sagib_retention_per_ton && (
-                <p className="text-red-500 text-sm mt-1">{errors.sagib_retention_per_ton.message}</p>
-              )}
-            </div>
+            {/* Show calculated rates */}
+            {watchTransportRate > 0 && (
+              <div className="bg-gray-50 p-3 rounded-lg space-y-1">
+                <p className="text-sm font-medium text-gray-700">Calculated Rates:</p>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <span className="text-gray-500">Driver Rate (40%):</span>
+                    <span className="ml-2 font-medium">{formatCurrency(driverRate)}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Sagib Retention (60%):</span>
+                    <span className="ml-2 font-medium">{formatCurrency(sagibRate)}</span>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">These rates are automatically calculated</p>
+              </div>
+            )}
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit" className="bg-primary text-white">
-                {editingBand ? 'Update' : 'Create'}
+              <Button type="submit" className="bg-primary text-white" disabled={createMutation.isLoading || updateMutation.isLoading}>
+                {createMutation.isLoading || updateMutation.isLoading ? 'Saving...' : (editingBand ? 'Update' : 'Create')}
               </Button>
             </DialogFooter>
           </form>

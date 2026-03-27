@@ -21,7 +21,8 @@ const DriverPayroll = () => {
 
   const { data: payroll, isLoading, refetch } = useQuery({
     queryKey: ['driver-payroll', week, year],
-    queryFn: () => getDriverPayroll(week, year)
+    queryFn: () => getDriverPayroll(week, year),
+    enabled: true,
   });
 
   const generateMutation = useMutation({
@@ -61,20 +62,26 @@ const DriverPayroll = () => {
     setYear(newYear);
   };
 
+  const handleViewDetails = (driverId, driverName) => {
+    navigate(`/payroll/driver-details/${driverId}?week=${week}&year=${year}&name=${encodeURIComponent(driverName)}`);
+  };
+
   const payrollData = payroll?.data || [];
-  const totalPayroll = payrollData.reduce((sum, item) => sum + (item.weekly_pay || 0), 0);
-  const paidCount = payrollData.filter(item => item.is_paid).length;
-  const unpaidCount = payrollData.length - paidCount;
+  
+  // Calculate totals - parse values properly
+  const totalPayroll = payrollData.reduce((sum, item) => sum + (parseFloat(item.weekly_pay) || 0), 0);
+  const paidCount = payrollData.filter(item => item.is_paid === true).length;
+  const unpaidCount = payrollData.filter(item => item.is_paid !== true).length;
   const totalOutstanding = payrollData
-    .filter(item => !item.is_paid)
-    .reduce((sum, item) => sum + (item.weekly_pay || 0), 0);
+    .filter(item => item.is_paid !== true)
+    .reduce((sum, item) => sum + (parseFloat(item.weekly_pay) || 0), 0);
 
   const columns = [
-    { key: "driver_name", label: "Driver Name" },
-    { key: "truck_plate", label: "Truck" },
-    { key: "total_trips", label: "Total Trips" },
-    { key: "total_tons", label: "Total Tons", render: (value) => formatTons(value) },
-    { key: "weekly_pay", label: "Weekly Pay", render: (value) => formatCurrency(value) },
+    { key: "driver_name", label: "Driver Name", render: (v) => v || 'N/A' },
+    { key: "truck_plate", label: "Truck", render: (v) => v || 'N/A' },
+    { key: "total_trips", label: "Total Trips", render: (v) => v || 0 },
+    { key: "total_tons", label: "Total Tons", render: (v) => formatTons(parseFloat(v) || 0) },
+    { key: "weekly_pay", label: "Weekly Pay", render: (v) => formatCurrency(parseFloat(v) || 0) },
     { 
       key: "is_paid", 
       label: "Paid Status",
@@ -105,7 +112,7 @@ const DriverPayroll = () => {
           <Button 
             variant="ghost" 
             size="sm" 
-            onClick={() => navigate(`/payroll/driver-details/${row.driver_id}?week=${week}&year=${year}&name=${encodeURIComponent(row.driver_name)}`)}
+            onClick={() => handleViewDetails(row.driver_id, row.driver_name)}
             className="text-blue-600"
           >
             <Eye className="h-4 w-4 mr-1" />

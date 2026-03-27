@@ -1,9 +1,26 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { 
-  LayoutDashboard, Truck, Scale, Users, UserCircle, 
-  FileText, DollarSign, ChevronDown, ChevronRight, 
-  Settings, ClipboardList, BarChart 
+  LayoutDashboard, 
+  Truck, 
+  Scale, 
+  Users, 
+  UserCircle, 
+  FileText, 
+  DollarSign,
+  ChevronDown,
+  ChevronRight,
+  Settings,
+  ClipboardList,
+  BarChart,
+  MapPin,
+  User,
+  Calendar,
+  TrendingUp,
+  Package,
+  Headphones,
+  Home,
+  Activity
 } from 'lucide-react';
 
 const Sidebar = () => {
@@ -25,9 +42,8 @@ const Sidebar = () => {
       label: 'Operations',
       icon: ClipboardList,
       items: [
-        { path: '/harvesting', icon: Truck, label: 'Harvest Assignments' },
-        { path: '/loading', icon: Scale, label: 'Loading Records' },
-        { path: '/transport', icon: Truck, label: 'Transport Trips' },
+        { path: '/harvesting', icon: Scale, label: 'Harvest Assignments' },
+        { path: '/loading', icon: Truck, label: 'Loading & Transport' },
       ]
     },
     {
@@ -45,11 +61,13 @@ const Sidebar = () => {
       label: 'Reports',
       icon: BarChart,
       items: [
-        { path: '/reports/daily', icon: FileText, label: 'Daily Returns' },
-        { path: '/reports/weekly', icon: FileText, label: 'Weekly Returns' },
-        { path: '/reports/headman', icon: Users, label: 'Headman Performance' },
-        { path: '/reports/supervisor', icon: UserCircle, label: 'Supervisor Performance' },
-        { path: '/reports/driver', icon: Truck, label: 'Driver Performance' },
+        { path: '/reports/daily', icon: Calendar, label: 'Daily Returns' },
+        { path: '/reports/weekly', icon: TrendingUp, label: 'Weekly Returns' },
+        { path: '/reports/headman-performance', icon: Users, label: 'Headman Performance' },
+        { path: '/reports/headman-harvest', icon: Scale, label: 'Headman Harvest Report' },
+        { path: '/reports/supervisor-performance', icon: UserCircle, label: 'Supervisor Performance' },
+        { path: '/reports/supervisor-loading', icon: Truck, label: 'Supervisor Loading Report' },
+        { path: '/reports/driver-performance', icon: Truck, label: 'Driver Performance' },
       ]
     },
     {
@@ -60,16 +78,16 @@ const Sidebar = () => {
         { path: '/setup/supervisors', icon: UserCircle, label: 'Supervisors' },
         { path: '/setup/headmen', icon: Users, label: 'Headmen' },
         { path: '/setup/drivers', icon: Truck, label: 'Drivers & Trucks' },
-        { path: '/setup/outgrowers', icon: Users, label: 'Outgrowers' },
+        { path: '/setup/outgrowers', icon: MapPin, label: 'Outgrowers' },
         { path: '/setup/weighbridges', icon: Scale, label: 'Weighbridges' },
-        { path: '/setup/distance-bands', icon: Truck, label: 'Distance Bands' },
+        { path: '/setup/distance-bands', icon: Activity, label: 'Distance Bands' },
         { path: '/setup/rate-config', icon: DollarSign, label: 'Rate Configuration' },
       ]
     }
   ];
 
   return (
-    <div className="w-64 bg-primary text-white flex flex-col fixed h-full shadow-lg">
+    <div className="w-64 bg-primary text-white flex flex-col fixed h-full shadow-lg z-20">
       <div className="p-6 border-b border-primary-light">
         <h1 className="text-xl font-bold text-white">Sagib Enterprises</h1>
         <p className="text-sm text-accent mt-1">Cane Operations</p>
@@ -137,6 +155,12 @@ const Sidebar = () => {
           );
         })}
       </nav>
+      
+      {/* Footer with version info */}
+      <div className="p-4 border-t border-primary-light text-xs text-gray-400">
+        <p>Sagib Operations v1.0</p>
+        <p className="mt-1">© 2024 Sagib Enterprises</p>
+      </div>
     </div>
   );
 };
