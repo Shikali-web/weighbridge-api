@@ -1,9 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Edit, Trash2, Search } from 'lucide-react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { toast } from 'sonner';
 import DataTable from '../../components/shared/DataTable';
 import ConfirmDialog from '../../components/shared/ConfirmDialog';
@@ -28,40 +25,55 @@ import {
 import { getTrucks, createTruck, updateTruck, deleteTruck } from '../../api/setup';
 import { getDrivers } from '../../api/setup';
 
-const truckSchema = z.object({
-  plate_no: z.string().min(1, 'Plate number is required'),
-  model: z.string().min(1, 'Model is required'),
-  capacity_tons: z.number().min(0.1, 'Capacity must be greater than 0'),
-  driver_id: z.string().optional(),
-  is_active: z.boolean().default(true),
-});
-
 const TrucksList = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTruck, setEditingTruck] = useState(null);
+  const [formData, setFormData] = useState({
+    plate_no: '',
+    model: '',
+    capacity_tons: '',
+    driver_id: 'none',
+    is_active: true,
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const queryClient = useQueryClient();
 
-  const { data: trucks, isLoading } = useQuery({
+  const { data: trucks, isLoading, error: trucksError } = useQuery({
     queryKey: ['trucks', searchTerm],
     queryFn: () => getTrucks(searchTerm)
   });
 
-  const { data: drivers } = useQuery({
+  const { data: drivers, isLoading: driversLoading } = useQuery({
     queryKey: ['drivers'],
     queryFn: () => getDrivers()
   });
 
-  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm({
-    resolver: zodResolver(truckSchema),
-    defaultValues: {
+  const handleInputChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData({
+      ...formData,
+      [name]: type === 'checkbox' ? checked : value
+    });
+  };
+
+  const handleSelectChange = (name, value) => {
+    setFormData({
+      ...formData,
+      [name]: value
+    });
+  };
+
+  const resetForm = () => {
+    setFormData({
       plate_no: '',
       model: '',
       capacity_tons: '',
-      driver_id: '',
+      driver_id: 'none',
       is_active: true,
-    }
-  });
+    });
+    setEditingTruck(null);
+  };
 
   const createMutation = useMutation({
     mutationFn: createTruck,
@@ -69,10 +81,13 @@ const TrucksList = () => {
       toast.success('Truck created successfully');
       queryClient.invalidateQueries(['trucks']);
       setIsModalOpen(false);
-      reset();
+      resetForm();
+      setIsSubmitting(false);
     },
     onError: (error) => {
+      console.error('Create error:', error);
       toast.error(error.message || 'Failed to create truck');
+      setIsSubmitting(false);
     }
   });
 
@@ -82,11 +97,13 @@ const TrucksList = () => {
       toast.success('Truck updated successfully');
       queryClient.invalidateQueries(['trucks']);
       setIsModalOpen(false);
-      setEditingTruck(null);
-      reset();
+      resetForm();
+      setIsSubmitting(false);
     },
     onError: (error) => {
+      console.error('Update error:', error);
       toast.error(error.message || 'Failed to update truck');
+      setIsSubmitting(false);
     }
   });
 
@@ -97,37 +114,60 @@ const TrucksList = () => {
       queryClient.invalidateQueries(['trucks']);
     },
     onError: (error) => {
+      console.error('Delete error:', error);
       toast.error(error.message || 'Failed to delete truck');
     }
   });
 
-  const onSubmit = (data) => {
-    const formattedData = {
-      ...data,
-      capacity_tons: parseFloat(data.capacity_tons),
-      driver_id: data.driver_id ? parseInt(data.driver_id) : null
-    };
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
     
+    if (!formData.plate_no.trim()) {
+      toast.error('Plate number is required');
+      setIsSubmitting(false);
+      return;
+    }
+    if (!formData.model.trim()) {
+      toast.error('Model is required');
+      setIsSubmitting(false);
+      return;
+    }
+    if (!formData.capacity_tons || parseFloat(formData.capacity_tons) <= 0) {
+      toast.error('Valid capacity is required');
+      setIsSubmitting(false);
+      return;
+    }
+
+    const dataToSubmit = {
+      plate_no: formData.plate_no.trim(),
+      model: formData.model.trim(),
+      capacity_tons: parseFloat(formData.capacity_tons),
+      driver_id: formData.driver_id === 'none' ? null : parseInt(formData.driver_id),
+      is_active: formData.is_active,
+    };
+
     if (editingTruck) {
-      updateMutation.mutate({ id: editingTruck.id, data: formattedData });
+      updateMutation.mutate({ id: editingTruck.id, data: dataToSubmit });
     } else {
-      createMutation.mutate(formattedData);
+      createMutation.mutate(dataToSubmit);
     }
   };
 
   const handleEdit = (truck) => {
     setEditingTruck(truck);
-    setValue('plate_no', truck.plate_no);
-    setValue('model', truck.model);
-    setValue('capacity_tons', truck.capacity_tons);
-    setValue('driver_id', truck.driver_id?.toString() || '');
-    setValue('is_active', truck.is_active);
+    setFormData({
+      plate_no: truck.plate_no || '',
+      model: truck.model || '',
+      capacity_tons: truck.capacity_tons || '',
+      driver_id: truck.driver_id ? truck.driver_id.toString() : 'none',
+      is_active: truck.is_active !== undefined ? truck.is_active : true,
+    });
     setIsModalOpen(true);
   };
 
   const handleAddNew = () => {
-    setEditingTruck(null);
-    reset();
+    resetForm();
     setIsModalOpen(true);
   };
 
@@ -168,40 +208,46 @@ const TrucksList = () => {
     }
   ];
 
+  if (trucksError) {
+    return (
+      <div className="p-6 text-center text-red-600">
+        Error loading trucks: {trucksError.message}
+      </div>
+    );
+  }
+
   return (
-    <>
-      <div className="space-y-4">
-        <div className="flex justify-between items-center">
-          <h3 className="text-lg font-semibold text-gray-900">Trucks</h3>
-          <Button onClick={handleAddNew} className="bg-primary text-white">
-            <Plus className="h-4 w-4 mr-2" />
-            Add Truck
-          </Button>
-        </div>
-
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search trucks..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-          </div>
-        </div>
-
-        <DataTable
-          columns={columns}
-          data={trucks?.data || []}
-          loading={isLoading}
-          emptyMessage="No trucks found"
-        />
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <h3 className="text-lg font-semibold text-gray-900">Trucks</h3>
+        <Button onClick={handleAddNew} className="bg-primary text-white">
+          <Plus className="h-4 w-4 mr-2" />
+          Add Truck
+        </Button>
       </div>
 
+      <div className="bg-white rounded-lg shadow p-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search trucks by plate or model..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+        </div>
+      </div>
+
+      <DataTable
+        columns={columns}
+        data={trucks?.data || []}
+        loading={isLoading}
+        emptyMessage="No trucks found"
+      />
+
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>{editingTruck ? 'Edit Truck' : 'Add New Truck'}</DialogTitle>
             <DialogDescription>
@@ -209,59 +255,59 @@ const TrucksList = () => {
             </DialogDescription>
           </DialogHeader>
           
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <Label htmlFor="plate_no">Plate Number</Label>
+              <Label htmlFor="plate_no">Plate Number *</Label>
               <Input
                 id="plate_no"
-                {...register('plate_no')}
-                placeholder="Enter plate number"
+                name="plate_no"
+                value={formData.plate_no}
+                onChange={handleInputChange}
+                placeholder="Enter plate number (e.g., KCA 123A)"
                 className="mt-1"
+                required
               />
-              {errors.plate_no && (
-                <p className="text-red-500 text-sm mt-1">{errors.plate_no.message}</p>
-              )}
             </div>
 
             <div>
-              <Label htmlFor="model">Model</Label>
+              <Label htmlFor="model">Model *</Label>
               <Input
                 id="model"
-                {...register('model')}
-                placeholder="Enter truck model"
+                name="model"
+                value={formData.model}
+                onChange={handleInputChange}
+                placeholder="Enter truck model (e.g., Fuso, Isuzu)"
                 className="mt-1"
+                required
               />
-              {errors.model && (
-                <p className="text-red-500 text-sm mt-1">{errors.model.message}</p>
-              )}
             </div>
 
             <div>
-              <Label htmlFor="capacity_tons">Capacity (Tons)</Label>
+              <Label htmlFor="capacity_tons">Capacity (Tons) *</Label>
               <Input
                 id="capacity_tons"
+                name="capacity_tons"
                 type="number"
                 step="0.1"
-                {...register('capacity_tons', { valueAsNumber: true })}
+                value={formData.capacity_tons}
+                onChange={handleInputChange}
                 placeholder="Enter capacity in tons"
                 className="mt-1"
+                required
               />
-              {errors.capacity_tons && (
-                <p className="text-red-500 text-sm mt-1">{errors.capacity_tons.message}</p>
-              )}
             </div>
 
             <div>
               <Label htmlFor="driver_id">Driver (Optional)</Label>
               <Select
-                value={watch('driver_id')}
-                onValueChange={(value) => setValue('driver_id', value)}
+                value={formData.driver_id}
+                onValueChange={(value) => handleSelectChange('driver_id', value)}
               >
                 <SelectTrigger className="mt-1">
                   <SelectValue placeholder="Select driver" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None</SelectItem>
+                  <SelectItem value="none">None</SelectItem>
                   {drivers?.data?.map((driver) => (
                     <SelectItem key={driver.id} value={driver.id.toString()}>
                       {driver.name} - {driver.license_no}
@@ -274,8 +320,10 @@ const TrucksList = () => {
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"
-                {...register('is_active')}
                 id="is_active"
+                name="is_active"
+                checked={formData.is_active}
+                onChange={handleInputChange}
                 className="h-4 w-4 rounded border-gray-300"
               />
               <Label htmlFor="is_active" className="cursor-pointer">Active</Label>
@@ -285,14 +333,14 @@ const TrucksList = () => {
               <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit" className="bg-primary text-white">
-                {editingTruck ? 'Update' : 'Create'}
+              <Button type="submit" className="bg-primary text-white" disabled={isSubmitting}>
+                {isSubmitting ? 'Saving...' : (editingTruck ? 'Update' : 'Create')}
               </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
-    </>
+    </div>
   );
 };
 

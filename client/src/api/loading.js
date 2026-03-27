@@ -6,3 +6,4 @@ export const createLoadingRecord = (data) => apiClient.post('/loading-records', 
 export const updateLoadingRecord = (id, data) => apiClient.put(`/loading-records/${id}`, data);
 export const deleteLoadingRecord = (id) => apiClient.delete(`/loading-records/${id}`);
 export const computeLoadingFinancials = (id) => apiClient.post(`/loading-records/${id}/compute-financials`);
+export const getAvailableAssignments = () => apiClient.get('/loading-records/available-assignments');

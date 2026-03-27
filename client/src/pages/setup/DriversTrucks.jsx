@@ -10,7 +10,7 @@ const DriversTrucks = () => {
     <div className="space-y-6">
       <h2 className="text-2xl font-bold text-gray-900">Drivers & Trucks</h2>
       
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full max-w-md grid-cols-2">
           <TabsTrigger value="drivers">Drivers</TabsTrigger>
           <TabsTrigger value="trucks">Trucks</TabsTrigger>
