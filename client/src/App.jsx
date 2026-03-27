@@ -24,6 +24,9 @@ import Weighbridges from './pages/setup/Weighbridges';
 import DistanceBands from './pages/setup/DistanceBands';
 import RateConfig from './pages/setup/RateConfig';
 import HarvestDetail from './pages/harvesting/HarvestDetail';
+import HeadmanPayrollDetails from './pages/payroll/HeadmanPayrollDetails';
+import SupervisorPayrollDetails from './pages/payroll/SupervisorPayrollDetails';
+import DriverPayrollDetails from './pages/payroll/DriverPayrollDetails';
 
 const queryClient = new QueryClient();
 
@@ -57,6 +60,9 @@ function App() {
                 <Route path="/setup/distance-bands" element={<DistanceBands />} />
                 <Route path="/setup/rate-config" element={<RateConfig />} />
                 <Route path="/harvesting/:id" element={<HarvestDetail />} />
+                <Route path="/payroll/headman-details/:headmanId" element={<HeadmanPayrollDetails />} />
+                <Route path="/payroll/supervisor-details/:supervisorId" element={<SupervisorPayrollDetails />} />
+                <Route path="/payroll/driver-details/:driverId" element={<DriverPayrollDetails />} />
               </Routes>
             </main>
           </div>

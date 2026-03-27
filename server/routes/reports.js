@@ -347,4 +347,94 @@ router.get('/headman-performance', async (req, res, next) => {
     next(err);
   }
 });
+
+// Supervisor Performance
+router.get('/supervisor-performance', async (req, res, next) => {
+  try {
+    const { week, year } = req.query;
+    
+    let targetWeek = week;
+    let targetYear = year;
+    
+    if (!targetWeek || !targetYear) {
+      const today = new Date();
+      targetWeek = getWeekNumber(today);
+      targetYear = today.getFullYear();
+    }
+    
+    const { week_start, week_end } = getWeekDates(parseInt(targetWeek), parseInt(targetYear));
+    
+    console.log(`Fetching supervisor performance for week ${targetWeek}, year ${targetYear}`);
+    
+    const result = await pool.query(`
+      SELECT 
+        ROW_NUMBER() OVER (ORDER BY COUNT(DISTINCT lr.id) DESC) as rank,
+        s.id as supervisor_id,
+        s.name as supervisor_name,
+        COUNT(DISTINCT lr.id) as total_trips,
+        COALESCE(SUM(lr.tons_loaded), 0) as total_tons,
+        COUNT(DISTINCT lr.id) * 100 as weekly_pay,
+        COUNT(DISTINCT ha.id) as assignments_supervised
+      FROM supervisors s
+      LEFT JOIN loading_records lr ON s.id = lr.supervisor_id
+        AND lr.load_date BETWEEN $1::date AND $2::date
+      LEFT JOIN harvest_assignments ha ON lr.assignment_id = ha.id
+      WHERE s.is_active = true
+      GROUP BY s.id, s.name
+      ORDER BY total_tons DESC
+    `, [week_start, week_end]);
+    
+    console.log(`Found ${result.rows.length} supervisors with performance data`);
+    
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    console.error('Error fetching supervisor performance:', err);
+    next(err);
+  }
+});
+
+// Driver Performance
+router.get('/driver-performance', async (req, res, next) => {
+  try {
+    const { week, year } = req.query;
+    
+    let targetWeek = week;
+    let targetYear = year;
+    
+    if (!targetWeek || !targetYear) {
+      const today = new Date();
+      targetWeek = getWeekNumber(today);
+      targetYear = today.getFullYear();
+    }
+    
+    const { week_start, week_end } = getWeekDates(parseInt(targetWeek), parseInt(targetYear));
+    
+    console.log(`Fetching driver performance for week ${targetWeek}, year ${targetYear}`);
+    
+    const result = await pool.query(`
+      SELECT 
+        ROW_NUMBER() OVER (ORDER BY COALESCE(SUM(tt.driver_payment), 0) DESC) as rank,
+        d.id as driver_id,
+        d.name as driver_name,
+        t.plate_no as truck_plate,
+        COUNT(DISTINCT tt.id) as total_trips,
+        COALESCE(SUM(tt.tons_transported), 0) as total_tons,
+        COALESCE(SUM(tt.driver_payment), 0) as weekly_pay
+      FROM drivers d
+      LEFT JOIN trucks t ON d.id = t.driver_id
+      LEFT JOIN transport_trips tt ON d.id = tt.driver_id
+        AND tt.trip_date BETWEEN $1::date AND $2::date
+      WHERE d.is_active = true
+      GROUP BY d.id, d.name, t.plate_no
+      ORDER BY weekly_pay DESC
+    `, [week_start, week_end]);
+    
+    console.log(`Found ${result.rows.length} drivers with performance data`);
+    
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    console.error('Error fetching driver performance:', err);
+    next(err);
+  }
+});
 module.exports = router;
