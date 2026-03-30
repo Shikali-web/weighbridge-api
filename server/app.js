@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
+const authRoutes = require('./routes/auth');
 require('dotenv').config();
 
 const app = express();
@@ -11,6 +12,7 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json());
 app.use(morgan('dev'));
+app.use('/api/auth', authRoutes);
 
 // Import routes
 const weighbridges = require('./routes/weighbridges');
