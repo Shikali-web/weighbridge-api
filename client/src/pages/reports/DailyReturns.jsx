@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, TrendingUp, Truck, Scale, DollarSign, Package, Users, BarChart3, PieChart } from 'lucide-react';
+import { Calendar, TrendingUp, Truck, Scale, DollarSign, Package, Users, BarChart3, PieChart, Info } from 'lucide-react';
 import DataTable from '../../components/shared/DataTable';
 import EmptyState from '../../components/shared/EmptyState';
 import { formatCurrency, formatTons } from '../../utils/formatters';
@@ -20,10 +20,14 @@ const DailyReturns = () => {
         const result = await response.json();
         if (result.success && result.data.length > 0) {
           setAvailableDates(result.data);
-          setSelectedDate(result.data[0]);
+          setSelectedDate(result.data[0]); // Set to most recent date with data
+        } else {
+          // If no dates with data, set to today
+          setSelectedDate(new Date().toISOString().split('T')[0]);
         }
       } catch (err) {
         console.error('Error fetching dates:', err);
+        setSelectedDate(new Date().toISOString().split('T')[0]);
       }
     };
     fetchAvailableDates();
@@ -42,7 +46,7 @@ const DailyReturns = () => {
     try {
       const response = await fetch(`http://localhost:5000/api/reports/daily-working?date=${selectedDate}`);
       const result = await response.json();
-      console.log('Daily Returns Data:', result);
+      console.log('Daily Returns Data for', selectedDate, ':', result);
       
       if (result.success) {
         setData(result.data);
@@ -69,6 +73,10 @@ const DailyReturns = () => {
       month: 'long', 
       day: 'numeric' 
     });
+  };
+
+  const isDateWithData = (date) => {
+    return availableDates.includes(date);
   };
 
   const harvestColumns = [
@@ -133,15 +141,12 @@ const DailyReturns = () => {
           <h2 className="text-2xl font-bold text-gray-900">Daily Returns</h2>
           <div className="flex items-center gap-2 bg-white rounded-lg shadow px-4 py-2">
             <Calendar className="h-5 w-5 text-gray-500" />
-            <select
+            <input
+              type="date"
               value={selectedDate}
               onChange={handleDateChange}
               className="border-none focus:outline-none py-1"
-            >
-              {availableDates.map(date => (
-                <option key={date} value={date}>{formatDate(date)}</option>
-              ))}
-            </select>
+            />
           </div>
         </div>
         <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
@@ -165,27 +170,53 @@ const DailyReturns = () => {
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Daily Returns</h2>
-          <p className="text-sm text-gray-500 mt-1">{selectedDate ? formatDate(selectedDate) : 'Select a date'}</p>
+          <p className="text-sm text-gray-500 mt-1">{formatDate(selectedDate)}</p>
         </div>
         <div className="flex items-center gap-2 bg-white rounded-lg shadow px-4 py-2">
           <Calendar className="h-5 w-5 text-gray-500" />
-          <select
+          <input
+            type="date"
             value={selectedDate}
             onChange={handleDateChange}
             className="border-none focus:outline-none py-1"
-          >
-            {availableDates.map(date => (
-              <option key={date} value={date}>{formatDate(date)}</option>
-            ))}
-          </select>
+          />
+          {selectedDate && !isDateWithData(selectedDate) && availableDates.length > 0 && (
+            <div className="relative group">
+              <Info className="h-4 w-4 text-amber-500 cursor-help" />
+              <div className="absolute right-0 top-8 w-64 bg-gray-800 text-white text-xs rounded-lg p-2 hidden group-hover:block z-10">
+                No data for this date. 
+                {availableDates.length > 0 && (
+                  <> Try: {availableDates.slice(0, 3).map(d => formatDate(d)).join(', ')}</>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       {!hasData ? (
-        <EmptyState 
-          title="No Data Available"
-          subtitle={`No records found for ${selectedDate ? formatDate(selectedDate) : 'the selected date'}. Try selecting a different date from the dropdown.`}
-        />
+        <div className="space-y-4">
+          <EmptyState 
+            title="No Data Available"
+            subtitle={`No records found for ${formatDate(selectedDate)}.`}
+          />
+          {availableDates.length > 0 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <p className="text-blue-800 text-sm font-medium mb-2">📅 Dates with available data:</p>
+              <div className="flex flex-wrap gap-2">
+                {availableDates.map(date => (
+                  <button
+                    key={date}
+                    onClick={() => setSelectedDate(date)}
+                    className="px-3 py-1 bg-white border border-blue-300 rounded-lg text-sm text-blue-700 hover:bg-blue-50 transition-colors"
+                  >
+                    {formatDate(date)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       ) : (
         <>
           {/* Summary Cards */}
