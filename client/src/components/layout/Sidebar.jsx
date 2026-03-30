@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import { 
   LayoutDashboard, 
   Truck, 
@@ -14,16 +15,15 @@ import {
   ClipboardList,
   BarChart,
   MapPin,
-  User,
   Calendar,
   TrendingUp,
-  Package,
-  Headphones,
-  Home,
-  Activity
+  Activity,
+  User,
+  LogOut
 } from 'lucide-react';
 
 const Sidebar = () => {
+  const { user, logout } = useAuth();
   const [openGroups, setOpenGroups] = useState({
     operations: true,
     payroll: true,
@@ -35,45 +35,43 @@ const Sidebar = () => {
     setOpenGroups(prev => ({ ...prev, [group]: !prev[group] }));
   };
 
-  const navItems = [
-    { path: '/', icon: LayoutDashboard, label: 'Dashboard', group: null },
-    {
-      group: 'operations',
-      label: 'Operations',
-      icon: ClipboardList,
-      items: [
+  // Define menu items based on user role
+  const getNavItems = () => {
+    const role = user?.role;
+    
+    // Common items for all users
+    const commonItems = [
+      { path: '/', icon: LayoutDashboard, label: 'Dashboard', group: null }
+    ];
+    
+    // Role-specific items
+    let operationsItems = [];
+    let payrollItems = [];
+    let reportsItems = [];
+    let setupItems = [];
+    
+    if (role === 'admin') {
+      // Admin sees everything
+      operationsItems = [
         { path: '/harvesting', icon: Scale, label: 'Harvest Assignments' },
         { path: '/loading', icon: Truck, label: 'Loading & Transport' },
-      ]
-    },
-    {
-      group: 'payroll',
-      label: 'Payroll',
-      icon: DollarSign,
-      items: [
+      ];
+      payrollItems = [
         { path: '/payroll/headman', icon: Users, label: 'Headman Payroll' },
         { path: '/payroll/supervisor', icon: UserCircle, label: 'Supervisor Payroll' },
         { path: '/payroll/driver', icon: Truck, label: 'Driver Payroll' },
-      ]
-    },
-    {
-      group: 'reports',
-      label: 'Reports',
-      icon: BarChart,
-      items: [
+      ];
+      reportsItems = [
         { path: '/reports/daily', icon: Calendar, label: 'Daily Returns' },
         { path: '/reports/weekly', icon: TrendingUp, label: 'Weekly Returns' },
+        { path: '/reports/headman', icon: Users, label: 'Headman Performance' },
         { path: '/reports/headman-harvest', icon: Scale, label: 'Headman Harvest Report' },
+        { path: '/reports/supervisor', icon: UserCircle, label: 'Supervisor Performance' },
         { path: '/reports/supervisor-loading', icon: Truck, label: 'Supervisor Loading Report' },
-        { path: '/reports/driver-performance', icon: Truck, label: 'Driver Performance' },
+        { path: '/reports/driver-performance', icon: Activity, label: 'Driver Performance' },
         { path: '/reports/outgrower-performance', icon: Users, label: 'Outgrower Performance' },
-      ]
-    },
-    {
-      group: 'setup',
-      label: 'Setup',
-      icon: Settings,
-      items: [
+      ];
+      setupItems = [
         { path: '/setup/supervisors', icon: UserCircle, label: 'Supervisors' },
         { path: '/setup/headmen', icon: Users, label: 'Headmen' },
         { path: '/setup/drivers', icon: Truck, label: 'Drivers & Trucks' },
@@ -81,15 +79,90 @@ const Sidebar = () => {
         { path: '/setup/weighbridges', icon: Scale, label: 'Weighbridges' },
         { path: '/setup/distance-bands', icon: Activity, label: 'Distance Bands' },
         { path: '/setup/rate-config', icon: DollarSign, label: 'Rate Configuration' },
-      ]
+      ];
+    } 
+    else if (role === 'supervisor') {
+      // Supervisor sees only harvest assignments and their reports
+      operationsItems = [
+        { path: '/harvesting', icon: Scale, label: 'Harvest Assignments' },
+      ];
+      reportsItems = [
+        { path: '/reports/headman', icon: Users, label: 'Headman Performance' },
+        { path: '/reports/headman-harvest', icon: Scale, label: 'Headman Harvest Report' },
+      ];
     }
-  ];
+    else if (role === 'weighbridge') {
+      // Weighbridge operator sees only loading & transport
+      operationsItems = [
+        { path: '/loading', icon: Truck, label: 'Loading & Transport' },
+      ];
+      reportsItems = [
+        { path: '/reports/daily', icon: Calendar, label: 'Daily Returns' },
+        { path: '/reports/outgrower-performance', icon: Users, label: 'Outgrower Performance' },
+      ];
+    }
+    else if (role === 'headman') {
+      // Headman sees only their own performance
+      reportsItems = [
+        { path: '/reports/headman', icon: Users, label: 'My Performance' },
+      ];
+    }
+    
+    // Build navigation items
+    const navItems = [...commonItems];
+    
+    if (operationsItems.length > 0) {
+      navItems.push({
+        group: 'operations',
+        label: 'Operations',
+        icon: ClipboardList,
+        items: operationsItems
+      });
+    }
+    
+    if (payrollItems.length > 0) {
+      navItems.push({
+        group: 'payroll',
+        label: 'Payroll',
+        icon: DollarSign,
+        items: payrollItems
+      });
+    }
+    
+    if (reportsItems.length > 0) {
+      navItems.push({
+        group: 'reports',
+        label: 'Reports',
+        icon: BarChart,
+        items: reportsItems
+      });
+    }
+    
+    if (setupItems.length > 0) {
+      navItems.push({
+        group: 'setup',
+        label: 'Setup',
+        icon: Settings,
+        items: setupItems
+      });
+    }
+    
+    return navItems;
+  };
+  
+  const navItems = getNavItems();
 
   return (
     <div className="w-64 bg-primary text-white flex flex-col fixed h-full shadow-lg z-20">
       <div className="p-6 border-b border-primary-light">
         <h1 className="text-xl font-bold text-white">Sagib Enterprises</h1>
         <p className="text-sm text-accent mt-1">Cane Operations</p>
+        <div className="mt-2 text-xs text-gray-300">
+          Logged in as: <span className="font-medium text-white">{user?.full_name || user?.username}</span>
+          <span className="ml-1 px-1.5 py-0.5 bg-primary-light rounded text-xs">
+            {user?.role?.toUpperCase()}
+          </span>
+        </div>
       </div>
       
       <nav className="flex-1 overflow-y-auto py-4">
@@ -155,10 +228,24 @@ const Sidebar = () => {
         })}
       </nav>
       
-      {/* Footer with version info */}
-      <div className="p-4 border-t border-primary-light text-xs text-gray-400">
-        <p>Sagib Operations v1.0</p>
-        <p className="mt-1">© 2024 Sagib Enterprises</p>
+      {/* User Info Footer */}
+      <div className="p-4 border-t border-primary-light">
+        <div className="flex items-center gap-2">
+          <div className="h-8 w-8 bg-primary-light rounded-full flex items-center justify-center">
+            <User className="h-4 w-4 text-white" />
+          </div>
+          <div className="flex-1">
+            <p className="text-xs font-medium text-white truncate">{user?.full_name || user?.username}</p>
+            <p className="text-xs text-gray-300">{user?.role?.toUpperCase()}</p>
+          </div>
+          <button
+            onClick={logout}
+            className="p-1 hover:bg-primary-light rounded transition-colors"
+            title="Logout"
+          >
+            <LogOut className="h-4 w-4 text-gray-300 hover:text-white" />
+          </button>
+        </div>
       </div>
     </div>
   );

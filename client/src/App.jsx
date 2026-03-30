@@ -35,6 +35,7 @@ import SupervisorLoadingReport from './pages/reports/SupervisorLoadingReport';
 import OutgrowerPerformance from './pages/reports/OutgrowerPerformance';
 import OutgrowerDetails from './pages/reports/OutgrowerDetails';
 
+
 const queryClient = new QueryClient();
 
 function AppContent() {
@@ -64,7 +65,7 @@ function AppContent() {
         <TopBar />
         <main className="p-6 overflow-y-auto h-[calc(100vh-73px)] bg-background">
           <Routes>
-            <Route path="/" element={<Dashboard />} />
+           <Route path="/" element={<Dashboard />} />
             <Route path="/harvesting" element={<HarvestList />} />
             <Route path="/loading" element={<LoadingList />} />
             <Route path="/transport" element={<TransportList />} />

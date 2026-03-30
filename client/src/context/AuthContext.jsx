@@ -28,7 +28,7 @@ export const AuthProvider = ({ children }) => {
       return { success: false, message: data.message };
     } catch (error) {
       console.error('Login error:', error);
-      return { success: false, message: 'Login failed. Check if backend is running.' };
+      return { success: false, message: 'Login failed' };
     }
   };
 
@@ -41,6 +41,8 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const storedToken = localStorage.getItem('token');
     const storedUser = localStorage.getItem('user');
+    
+    console.log('Stored user:', storedUser);
     
     if (storedToken && storedUser) {
       setUser(JSON.parse(storedUser));
