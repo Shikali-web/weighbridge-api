@@ -5,7 +5,7 @@ import EmptyState from '../../components/shared/EmptyState';
 import { formatCurrency, formatTons } from '../../utils/formatters';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RePieChart, Pie, Cell } from 'recharts';
 
-const DailyReturns = () => {
+const DailyReturnsComplete = () => {
   const [selectedDate, setSelectedDate] = useState('');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -396,4 +396,4 @@ const DailyReturns = () => {
   );
 };
 
-export default DailyReturns;
+export default DailyReturnsComplete;

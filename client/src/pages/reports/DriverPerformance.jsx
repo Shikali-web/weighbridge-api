@@ -25,7 +25,6 @@ const DriverPerformance = () => {
       const result = await response.json();
       console.log('Driver API Response:', result);
       if (result.success) {
-        // Parse the data - handle string values from API
         const parsedData = result.data.map(item => ({
           driver_id: item.driver_id,
           driver_name: item.driver_name || 'Unknown',
@@ -33,7 +32,7 @@ const DriverPerformance = () => {
           total_trips: parseInt(item.total_trips) || 0,
           total_tons: parseFloat(item.total_tons) || 0,
           weekly_pay: parseFloat(item.weekly_pay) || 0,
-          rank: parseInt(item.rank) || 0
+          rank: item.rank
         }));
         setData(parsedData);
       } else {
@@ -75,8 +74,8 @@ const DriverPerformance = () => {
     { key: "driver_name", label: "Driver", render: (v) => v || 'N/A' },
     { key: "truck_plate", label: "Truck", render: (v) => v || 'N/A' },
     { key: "total_trips", label: "Total Trips", render: (v) => v || 0 },
-    { key: "total_tons", label: "Total Tons", render: (v) => formatTons(v || 0) },
-    { key: "weekly_pay", label: "Weekly Pay", render: (v) => formatCurrency(v || 0) },
+    { key: "total_tons", label: "Total Tons", render: (v) => formatTons(v) },
+    { key: "weekly_pay", label: "Weekly Pay", render: (v) => formatCurrency(v) },
     {
       key: "actions",
       label: "Actions",
@@ -94,7 +93,6 @@ const DriverPerformance = () => {
     }
   ];
 
-  // Prepare chart data
   const maxTons = Math.max(...data.map(item => item.total_tons || 0), 1);
   const chartData = data.slice(0, 10).map((item, index) => ({
     rank: index + 1,
@@ -152,7 +150,7 @@ const DriverPerformance = () => {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Button variant="ghost" onClick={() => navigate('/reports')} className="p-2">
-            <ArrowLeft className="h-5 w-5" />
+            <ArrowLeft className="h-5-w-5" />
           </Button>
           <div>
             <h2 className="text-2xl font-bold text-gray-900">Driver Performance</h2>
@@ -194,7 +192,7 @@ const DriverPerformance = () => {
             </div>
           </div>
 
-          {/* Performance Chart - Tons per Driver */}
+          {/* Performance Chart */}
           {chartData.length > 0 && (
             <div className="bg-white rounded-lg shadow p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Top 10 Drivers by Tons Transported</h3>

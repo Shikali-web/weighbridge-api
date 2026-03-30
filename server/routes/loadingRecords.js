@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
 
-// Helper functions
 function getWeekNumber(date) {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
@@ -23,7 +22,30 @@ function getWeekEnd(date) {
   return new Date(start.setDate(start.getDate() + 6));
 }
 
-// Get available assignments for loading (not manually completed)
+async function updateHarvestAssignmentStatus(client, assignmentId) {
+  const totalLoaded = await client.query(
+    'SELECT COALESCE(SUM(tons_loaded), 0) as total FROM loading_records WHERE assignment_id = $1',
+    [assignmentId]
+  );
+  
+  const loaded = parseFloat(totalLoaded.rows[0].total);
+  const assignment = await client.query(
+    'SELECT expected_tonnage, manually_completed FROM harvest_assignments WHERE id = $1',
+    [assignmentId]
+  );
+  
+  if (assignment.rows.length > 0 && !assignment.rows[0].manually_completed) {
+    const expected = parseFloat(assignment.rows[0].expected_tonnage);
+    const newStatus = loaded >= expected ? 'completed' : (loaded > 0 ? 'in_progress' : 'pending');
+    
+    await client.query(
+      'UPDATE harvest_assignments SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      [newStatus, assignmentId]
+    );
+  }
+}
+
+// Get available assignments for loading
 router.get('/available-assignments', async (req, res, next) => {
   try {
     const result = await pool.query(`
@@ -46,7 +68,7 @@ router.get('/available-assignments', async (req, res, next) => {
 // Get all loading records
 router.get('/', async (req, res, next) => {
   try {
-    const { search, status, week, year, weighbridge_id, supervisor_id, assignment_id } = req.query;
+    const { search, status, week, year, weighbridge_id, supervisor_id, assignment_id, load_date } = req.query;
     let query = `
       SELECT lr.*, ha.outgrower_id, o.name as outgrower_name, o.field_code,
              h.name as headman_name, w.name as weighbridge_name, s.name as supervisor_name,
@@ -105,6 +127,12 @@ router.get('/', async (req, res, next) => {
       paramIndex++;
     }
     
+    if (load_date) {
+      query += ` AND lr.load_date = $${paramIndex}::date`;
+      params.push(load_date);
+      paramIndex++;
+    }
+    
     query += ' ORDER BY lr.load_date DESC';
     
     const result = await pool.query(query, params);
@@ -144,7 +172,7 @@ router.get('/:id', async (req, res, next) => {
   }
 });
 
-// Create loading record - NO RESTRICTION on tonnage
+// Create loading record
 router.post('/', async (req, res, next) => {
   const { assignment_id, weighbridge_id, supervisor_id, load_date, tons_loaded, trip_count, status = 'completed', notes } = req.body;
   const client = await pool.connect();
@@ -152,9 +180,8 @@ router.post('/', async (req, res, next) => {
   try {
     await client.query('BEGIN');
     
-    // Check if assignment exists and is not manually completed
     const assignmentCheck = await client.query(
-      'SELECT manually_completed, status FROM harvest_assignments WHERE id = $1',
+      'SELECT expected_tonnage, manually_completed, status FROM harvest_assignments WHERE id = $1',
       [assignment_id]
     );
     
@@ -165,21 +192,11 @@ router.post('/', async (req, res, next) => {
     
     const assignment = assignmentCheck.rows[0];
     
-    // Check if assignment is already manually completed
     if (assignment.manually_completed === true) {
       await client.query('ROLLBACK');
       return res.status(400).json({ 
         success: false, 
-        message: 'Cannot add load to completed harvest assignment. The field has been marked as fully harvested.' 
-      });
-    }
-    
-    // Check if assignment is cancelled
-    if (assignment.status === 'cancelled') {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Cannot add load to cancelled harvest assignment.' 
+        message: 'Cannot add load to completed harvest assignment.' 
       });
     }
     
@@ -189,15 +206,6 @@ router.post('/', async (req, res, next) => {
     const week_number = getWeekNumber(loadDate);
     const year = loadDate.getFullYear();
     
-    // Get current total loaded for display purposes
-    const currentLoaded = await client.query(
-      'SELECT COALESCE(SUM(tons_loaded), 0) as total FROM loading_records WHERE assignment_id = $1',
-      [assignment_id]
-    );
-    
-    const currentTotal = parseFloat(currentLoaded.rows[0].total);
-    
-    // Insert loading record
     const result = await client.query(
       `INSERT INTO loading_records 
        (assignment_id, weighbridge_id, supervisor_id, load_date, week_start, week_end, week_number, year, tons_loaded, trip_count, status, notes) 
@@ -205,13 +213,7 @@ router.post('/', async (req, res, next) => {
       [assignment_id, weighbridge_id, supervisor_id, load_date, weekStart, weekEnd, week_number, year, tons_loaded, trip_count, status, notes]
     );
     
-    // Update harvest assignment status to in_progress if this is the first load
-    if (currentTotal === 0) {
-      await client.query(
-        'UPDATE harvest_assignments SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-        ['in_progress', assignment_id]
-      );
-    }
+    await updateHarvestAssignmentStatus(client, assignment_id);
     
     await client.query('COMMIT');
     
@@ -233,61 +235,21 @@ router.put('/:id', async (req, res, next) => {
   try {
     await client.query('BEGIN');
     
-    // Get the original loading record to get the original assignment
-    const originalRecord = await client.query(
-      'SELECT assignment_id FROM loading_records WHERE id = $1',
-      [req.params.id]
-    );
-    
-    if (originalRecord.rows.length === 0) {
-      await client.query('ROLLBACK');
-      return res.status(404).json({ success: false, message: 'Loading record not found' });
-    }
-    
-    const originalAssignmentId = originalRecord.rows[0].assignment_id;
-    
-    // Check if assignment is manually completed
-    const assignmentCheck = await client.query(
-      'SELECT manually_completed FROM harvest_assignments WHERE id = $1',
-      [assignment_id || originalAssignmentId]
-    );
-    
-    if (assignmentCheck.rows.length === 0) {
-      await client.query('ROLLBACK');
-      return res.status(404).json({ success: false, message: 'Harvest assignment not found' });
-    }
-    
-    const assignment = assignmentCheck.rows[0];
-    
-    if (assignment.manually_completed === true) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Cannot update loading record for completed harvest assignment.' 
-      });
-    }
-    
-    const loadDate = new Date(load_date);
-    const weekStart = getWeekStart(loadDate);
-    const weekEnd = getWeekEnd(loadDate);
-    const week_number = getWeekNumber(loadDate);
-    const year = loadDate.getFullYear();
-    
     const result = await client.query(
       `UPDATE loading_records 
        SET assignment_id = $1, weighbridge_id = $2, supervisor_id = $3, 
-           load_date = $4, week_start = $5, week_end = $6, week_number = $7, 
-           year = $8, tons_loaded = $9, trip_count = $10, 
-           status = $11, notes = $12, updated_at = CURRENT_TIMESTAMP 
-       WHERE id = $13 RETURNING *`,
-      [assignment_id || originalAssignmentId, weighbridge_id, supervisor_id, load_date, 
-       weekStart, weekEnd, week_number, year, tons_loaded, trip_count, status, notes, req.params.id]
+           load_date = $4, tons_loaded = $5, trip_count = $6, 
+           status = $7, notes = $8, updated_at = CURRENT_TIMESTAMP 
+       WHERE id = $9 RETURNING *`,
+      [assignment_id, weighbridge_id, supervisor_id, load_date, tons_loaded, trip_count, status, notes, req.params.id]
     );
     
     if (result.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ success: false, message: 'Loading record not found' });
     }
+    
+    await updateHarvestAssignmentStatus(client, assignment_id);
     
     await client.query('COMMIT');
     
@@ -402,21 +364,7 @@ router.delete('/:id', async (req, res, next) => {
     await client.query('BEGIN');
     
     await client.query('DELETE FROM loading_records WHERE id = $1', [req.params.id]);
-    
-    // Update harvest assignment status if no loads remain
-    const remainingLoaded = await client.query(
-      'SELECT COALESCE(SUM(tons_loaded), 0) as total FROM loading_records WHERE assignment_id = $1',
-      [assignment_id]
-    );
-    
-    const totalLoaded = parseFloat(remainingLoaded.rows[0].total);
-    
-    if (totalLoaded === 0) {
-      await client.query(
-        'UPDATE harvest_assignments SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-        ['pending', assignment_id]
-      );
-    }
+    await updateHarvestAssignmentStatus(client, assignment_id);
     
     await client.query('COMMIT');
     

@@ -4,8 +4,8 @@ import WeekPicker from '../../components/shared/WeekPicker';
 import StatCard from '../../components/shared/StatCard';
 import DataTable from '../../components/shared/DataTable';
 import EmptyState from '../../components/shared/EmptyState';
-import { getWeeklyReturns, getCompanySummary } from '../../api/reports';
-import { formatCurrency, formatTons, getISOWeek, getWeekDates } from '../../utils/formatters';
+import { getWeeklyReturns } from '../../api/reports';
+import { formatCurrency, formatTons, getISOWeek } from '../../utils/formatters';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart } from 'recharts';
 
 const WeeklyReturns = () => {
@@ -15,7 +15,7 @@ const WeeklyReturns = () => {
   const [trendData, setTrendData] = useState([]);
   const [isLoadingTrend, setIsLoadingTrend] = useState(false);
 
-  const { data: returns, isLoading } = useQuery({
+  const { data: returns, isLoading, refetch } = useQuery({
     queryKey: ['weekly-returns', week, year],
     queryFn: () => getWeeklyReturns(week, year),
     enabled: true,
@@ -44,9 +44,26 @@ const WeeklyReturns = () => {
               costs: response.data.total_costs || 0,
               tons: response.data.total_actual_tons || 0
             });
+          } else {
+            data.push({
+              week: `W${targetWeek}`,
+              year: targetYear,
+              sagibNet: 0,
+              revenue: 0,
+              costs: 0,
+              tons: 0
+            });
           }
         } catch (err) {
           console.error('Error fetching trend data:', err);
+          data.push({
+            week: `W${targetWeek}`,
+            year: targetYear,
+            sagibNet: 0,
+            revenue: 0,
+            costs: 0,
+            tons: 0
+          });
         }
       }
       setTrendData(data);
@@ -58,11 +75,11 @@ const WeeklyReturns = () => {
   const handleWeekChange = (newWeek, newYear) => {
     setWeek(newWeek);
     setYear(newYear);
+    refetch();
   };
 
   const reportData = returns?.data || {};
-  const weekDates = getWeekDates(week, year);
-
+  
   const stats = [
     { 
       label: "Harvest Revenue", 
@@ -129,18 +146,26 @@ const WeeklyReturns = () => {
     { key: "sagib_net", label: "Sagib Net", render: (v) => formatCurrency(v) }
   ];
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-500">Loading weekly returns...</div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Weekly Returns</h2>
-          <p className="text-sm text-gray-500 mt-1">Week {week} • {weekDates.formatted}</p>
+          <p className="text-sm text-gray-500 mt-1">Financial summary for the selected week</p>
         </div>
       </div>
 
       <WeekPicker week={week} year={year} onChange={handleWeekChange} />
 
-      {!isLoading && !reportData.total_revenue ? (
+      {!reportData.total_revenue && !isLoading ? (
         <EmptyState 
           title="No Data Available"
           subtitle={`No returns found for week ${week}, ${year}`}

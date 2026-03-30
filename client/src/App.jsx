@@ -30,7 +30,11 @@ import DriverPayrollDetails from './pages/payroll/DriverPayrollDetails';
 import HeadmanPerformanceTest from './pages/reports/HeadmanPerformanceTest';
 import HeadmanHarvestReport from './pages/reports/HeadmanHarvestReport';
 import SupervisorLoadingReport from './pages/reports/SupervisorLoadingReport';
-
+import OutgrowerPerformance from './pages/reports/OutgrowerPerformance';
+import OutgrowerDetails from './pages/reports/OutgrowerDetails';
+import DailyReturnsWorking from './pages/reports/DailyReturnsWorking';
+import DailyNew from './pages/reports/DailyNew';
+import DailyReturnsComplete from './pages/reports/DailyReturnsComplete';
 const queryClient = new QueryClient();
 
 function App() {
@@ -69,6 +73,11 @@ function App() {
                 <Route path="/reports/headman-test" element={<HeadmanPerformanceTest />} />
               <Route path="/reports/headman-harvest" element={<HeadmanHarvestReport />} />
               <Route path="/reports/supervisor-loading" element={<SupervisorLoadingReport />} />
+              <Route path="/reports/outgrower-performance" element={<OutgrowerPerformance />} />
+              <Route path="/reports/outgrower-details/:outgrowerId" element={<OutgrowerDetails />} />
+              <Route path="/reports/daily-working" element={<DailyReturnsWorking />} />
+              <Route path="/reports/daily-new" element={<DailyNew />} />
+              <Route path="/reports/daily-complete" element={<DailyReturnsComplete />} />
               </Routes>
             </main>
           </div>

@@ -23,10 +23,10 @@ function getWeekEnd(date) {
   return new Date(start.setDate(start.getDate() + 6));
 }
 
-// Get all harvest assignments (using view)
+// Get all harvest assignments
 router.get('/', async (req, res, next) => {
   try {
-    const { search, status, week, year } = req.query;
+    const { search, status, week, year, assignment_date } = req.query;
     let query = `
       SELECT hawt.*, 
              o.name as outgrower_name, o.field_code, o.field_size_ha,
@@ -67,6 +67,12 @@ router.get('/', async (req, res, next) => {
       paramIndex++;
     }
     
+    if (assignment_date) {
+      query += ` AND hawt.assignment_date = $${paramIndex}::date`;
+      params.push(assignment_date);
+      paramIndex++;
+    }
+    
     query += ' ORDER BY hawt.assignment_date DESC';
     
     const result = await pool.query(query, params);
@@ -77,7 +83,7 @@ router.get('/', async (req, res, next) => {
   }
 });
 
-// Get single harvest assignment (using view)
+// Get single harvest assignment
 router.get('/:id', async (req, res, next) => {
   try {
     const result = await pool.query(
@@ -112,12 +118,13 @@ router.post('/', async (req, res, next) => {
     const weekEnd = getWeekEnd(assignmentDate);
     const week_number = getWeekNumber(assignmentDate);
     const year = assignmentDate.getFullYear();
+    const expected_tonnage = turnup * 2.25;
     
     const result = await pool.query(
       `INSERT INTO harvest_assignments 
-       (headman_id, outgrower_id, assignment_date, week_start, week_end, week_number, year, turnup, status, notes) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-      [headman_id, outgrower_id, assignment_date, weekStart, weekEnd, week_number, year, turnup, status, notes]
+       (headman_id, outgrower_id, assignment_date, week_start, week_end, week_number, year, turnup, expected_tonnage, status, notes) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+      [headman_id, outgrower_id, assignment_date, weekStart, weekEnd, week_number, year, turnup, expected_tonnage, status, notes]
     );
     
     res.status(201).json({ success: true, data: result.rows[0] });
@@ -129,21 +136,16 @@ router.post('/', async (req, res, next) => {
 
 // Update harvest assignment
 router.put('/:id', async (req, res, next) => {
-  const { headman_id, outgrower_id, assignment_date, turnup, status, notes, manually_completed } = req.body;
+  const { headman_id, outgrower_id, assignment_date, turnup, actual_tonnage, status, notes, loaded_tonnage } = req.body;
   
   try {
-    let completedAt = null;
-    if (manually_completed === true) {
-      completedAt = new Date();
-    }
-    
     const result = await pool.query(
       `UPDATE harvest_assignments 
        SET headman_id = $1, outgrower_id = $2, assignment_date = $3, 
-           turnup = $4, status = $5, notes = $6, manually_completed = $7, 
-           completed_at = $8, updated_at = CURRENT_TIMESTAMP 
+           turnup = $4, actual_tonnage = $5, loaded_tonnage = $6,
+           status = $7, notes = $8, updated_at = CURRENT_TIMESTAMP 
        WHERE id = $9 RETURNING *`,
-      [headman_id, outgrower_id, assignment_date, turnup, status, notes, manually_completed, completedAt, req.params.id]
+      [headman_id, outgrower_id, assignment_date, turnup, actual_tonnage, loaded_tonnage, status, notes, req.params.id]
     );
     
     if (result.rows.length === 0) {
@@ -288,7 +290,7 @@ router.post('/:id/compute-financials', async (req, res, next) => {
   }
 });
 
-// Delete harvest assignment
+// Delete harvest assignment (soft delete)
 router.delete('/:id', async (req, res, next) => {
   try {
     const result = await pool.query(
@@ -306,62 +308,4 @@ router.delete('/:id', async (req, res, next) => {
   }
 });
 
-// Get all harvest assignments (using view)
-router.get('/', async (req, res, next) => {
-  try {
-    const { search, status, week, year, limit } = req.query;
-    let query = `
-      SELECT hawt.*, 
-             o.name as outgrower_name, o.field_code, o.field_size_ha,
-             h.name as headman_name,
-             COALESCE(hf.factory_revenue, 0) as total_revenue,
-             COALESCE(hf.final_headman_payment, 0) as headman_share,
-             COALESCE(hf.final_sagib_net, 0) as sagib_net
-      FROM harvest_assignments_with_totals hawt
-      LEFT JOIN outgrowers o ON hawt.outgrower_id = o.id
-      LEFT JOIN headmen h ON hawt.headman_id = h.id
-      LEFT JOIN harvest_financials hf ON hawt.id = hf.assignment_id
-      WHERE 1=1
-    `;
-    let params = [];
-    let paramIndex = 1;
-    
-    if (search) {
-      query += ` AND (o.name ILIKE $${paramIndex} OR o.field_code ILIKE $${paramIndex})`;
-      params.push(`%${search}%`);
-      paramIndex++;
-    }
-    
-    if (status) {
-      query += ` AND hawt.computed_status = $${paramIndex}`;
-      params.push(status);
-      paramIndex++;
-    }
-    
-    if (week) {
-      query += ` AND hawt.week_number = $${paramIndex}`;
-      params.push(week);
-      paramIndex++;
-    }
-    
-    if (year) {
-      query += ` AND hawt.year = $${paramIndex}`;
-      params.push(year);
-      paramIndex++;
-    }
-    
-    query += ' ORDER BY hawt.assignment_date DESC';
-    
-    if (limit) {
-      query += ` LIMIT $${paramIndex}`;
-      params.push(limit);
-    }
-    
-    const result = await pool.query(query, params);
-    res.json({ success: true, data: result.rows });
-  } catch (err) {
-    console.error('Error in GET /harvest-assignments:', err);
-    next(err);
-  }
-});
 module.exports = router;

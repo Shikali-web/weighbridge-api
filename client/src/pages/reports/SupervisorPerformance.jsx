@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Eye, Loader2 } from 'lucide-react';
+import { ArrowLeft, Eye, Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import WeekPicker from '../../components/shared/WeekPicker';
 import DataTable from '../../components/shared/DataTable';
+import EmptyState from '../../components/shared/EmptyState';
 import { formatCurrency, formatTons, getISOWeek } from '../../utils/formatters';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
@@ -24,14 +25,12 @@ const SupervisorPerformance = () => {
       const result = await response.json();
       console.log('Supervisor API Response:', result);
       if (result.success) {
-        // Parse numeric values properly
         const parsedData = result.data.map(item => ({
-          ...item,
-          total_tons: parseFloat(item.total_tons) || 0,
-          total_trips: parseInt(item.total_trips) || 0,
-          weekly_pay: parseFloat(item.weekly_pay) || 0,
           supervisor_id: item.supervisor_id,
           supervisor_name: item.supervisor_name || 'Unknown',
+          total_trips: parseInt(item.total_trips) || 0,
+          total_tons: parseFloat(item.total_tons) || 0,
+          weekly_pay: parseFloat(item.weekly_pay) || 0,
           assignments_supervised: parseInt(item.assignments_supervised) || 0,
           rank: item.rank
         }));
@@ -56,6 +55,10 @@ const SupervisorPerformance = () => {
     setYear(newYear);
   };
 
+  const handleRefresh = () => {
+    fetchData();
+  };
+
   const handleViewDetails = (supervisorId, supervisorName) => {
     navigate(`/payroll/supervisor-details/${supervisorId}?week=${week}&year=${year}&name=${encodeURIComponent(supervisorName)}`);
   };
@@ -70,8 +73,8 @@ const SupervisorPerformance = () => {
     { key: "rank", label: "Rank", render: (_, row, idx) => idx + 1 },
     { key: "supervisor_name", label: "Supervisor", render: (v) => v || 'N/A' },
     { key: "total_trips", label: "Total Trips", render: (v) => v || 0 },
-    { key: "total_tons", label: "Total Tons", render: (v) => formatTons(v || 0) },
-    { key: "weekly_pay", label: "Weekly Pay", render: (v) => formatCurrency(v || 0) },
+    { key: "total_tons", label: "Total Tons", render: (v) => formatTons(v) },
+    { key: "weekly_pay", label: "Weekly Pay", render: (v) => formatCurrency(v) },
     { key: "assignments_supervised", label: "Assignments", render: (v) => v || 0 },
     {
       key: "actions",
@@ -90,7 +93,6 @@ const SupervisorPerformance = () => {
     }
   ];
 
-  // Prepare chart data
   const maxTrips = Math.max(...data.map(item => item.total_trips || 0), 1);
   const chartData = data.slice(0, 10).map((item, index) => ({
     rank: index + 1,
@@ -112,14 +114,25 @@ const SupervisorPerformance = () => {
   if (error) {
     return (
       <div className="space-y-6 p-6">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={() => navigate('/reports')} className="p-2">
-            <ArrowLeft className="h-5 w-5" />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" onClick={() => navigate('/reports')} className="p-2">
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">Supervisor Performance</h2>
+              <p className="text-sm text-gray-500 mt-1">Performance metrics by supervisor for the selected week</p>
+            </div>
+          </div>
+          <Button onClick={handleRefresh} variant="outline" size="sm">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
           </Button>
-          <h2 className="text-2xl font-bold text-gray-900">Supervisor Performance</h2>
         </div>
+        <WeekPicker week={week} year={year} onChange={handleWeekChange} />
         <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
-          <p className="text-red-600">Error: {error}</p>
+          <p className="text-red-600 mb-2">Error loading performance data</p>
+          <p className="text-sm text-red-500">{error}</p>
           <Button onClick={fetchData} className="mt-4 bg-primary text-white">
             Try Again
           </Button>
@@ -144,15 +157,19 @@ const SupervisorPerformance = () => {
             <p className="text-sm text-gray-500 mt-1">Performance metrics by supervisor for the selected week</p>
           </div>
         </div>
+        <Button onClick={handleRefresh} variant="outline" size="sm">
+          <RefreshCw className="h-4 w-4 mr-2" />
+          Refresh
+        </Button>
       </div>
 
       <WeekPicker week={week} year={year} onChange={handleWeekChange} />
 
       {data.length === 0 ? (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-8 text-center">
-          <p className="text-yellow-800">No supervisor performance data found for week {week}, {year}.</p>
-          <p className="text-yellow-600 text-sm mt-2">Add loading records first.</p>
-        </div>
+        <EmptyState 
+          title="No Performance Data"
+          subtitle={`No supervisor performance data found for week ${week}, ${year}. Add loading records first.`}
+        />
       ) : (
         <>
           {/* Summary Cards */}
@@ -175,7 +192,7 @@ const SupervisorPerformance = () => {
             </div>
           </div>
 
-          {/* Performance Chart - Trips per Supervisor */}
+          {/* Performance Chart */}
           {chartData.length > 0 && (
             <div className="bg-white rounded-lg shadow p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Top 10 Supervisors by Trips</h3>

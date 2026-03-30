@@ -25,7 +25,7 @@ function getWeekEnd(date) {
 // Get all transport trips
 router.get('/', async (req, res, next) => {
   try {
-    const { search, week, year, driver_id, weighbridge_id, distance_band_id } = req.query;
+    const { search, week, year, driver_id, weighbridge_id, distance_band_id, trip_date } = req.query;
     let query = `
       SELECT tt.*, t.plate_no, t.model, d.name as driver_name, o.name as outgrower_name,
              w.name as weighbridge_name, db.band_code
@@ -73,6 +73,12 @@ router.get('/', async (req, res, next) => {
     if (distance_band_id) {
       query += ` AND tt.distance_band_id = $${paramIndex}`;
       params.push(distance_band_id);
+      paramIndex++;
+    }
+    
+    if (trip_date) {
+      query += ` AND tt.trip_date = $${paramIndex}::date`;
+      params.push(trip_date);
       paramIndex++;
     }
     

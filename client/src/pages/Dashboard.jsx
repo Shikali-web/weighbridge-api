@@ -1,52 +1,67 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { 
   DollarSign, Truck, Scale, TrendingUp, Users, Package, 
   Calendar, ArrowUp, ArrowDown, BarChart3, PieChart 
 } from 'lucide-react';
+import WeekPicker from '../components/shared/WeekPicker';
+import StatCard from '../components/shared/StatCard';
+import DataTable from '../components/shared/DataTable';
 import { getCompanySummary, getWeeklyReturns } from '../api/reports';
 import { getHarvestAssignments } from '../api/harvest';
 import { getLoadingRecords } from '../api/loading';
 import { getTransportTrips } from '../api/transport';
-import StatCard from '../components/shared/StatCard';
-import DataTable from '../components/shared/DataTable';
 import { formatCurrency, formatTons, getWeekDates, getISOWeek } from '../utils/formatters';
 
 const Dashboard = () => {
   const currentDate = new Date();
-  const currentWeek = getISOWeek(currentDate);
-  const currentYear = currentDate.getFullYear();
-  const weekDates = getWeekDates(currentWeek, currentYear);
+  const [week, setWeek] = useState(getISOWeek(currentDate));
+  const [year, setYear] = useState(currentDate.getFullYear());
+  const weekDates = getWeekDates(week, year);
   
-  // Fetch company summary for current week
-  const { data: summary, isLoading: summaryLoading } = useQuery({
-    queryKey: ['company-summary', currentWeek, currentYear],
-    queryFn: () => getCompanySummary(currentWeek, currentYear),
-    refetchInterval: 30000, // Refresh every 30 seconds
+  // Handle week change
+  const handleWeekChange = (newWeek, newYear) => {
+    setWeek(newWeek);
+    setYear(newYear);
+  };
+  
+  // Fetch company summary for selected week
+  const { data: summary, isLoading: summaryLoading, refetch: refetchSummary } = useQuery({
+    queryKey: ['company-summary', week, year],
+    queryFn: () => getCompanySummary(week, year),
+    enabled: true,
   });
   
-  // Fetch recent harvest assignments
+  // Fetch weekly returns for selected week
+  const { data: weeklyReturns, isLoading: weeklyLoading } = useQuery({
+    queryKey: ['weekly-returns', week, year],
+    queryFn: () => getWeeklyReturns(week, year),
+    enabled: true,
+  });
+  
+  // Fetch recent harvest assignments for selected week
   const { data: harvests, isLoading: harvestsLoading } = useQuery({
-    queryKey: ['recent-harvests'],
-    queryFn: () => getHarvestAssignments({ limit: 5 }),
-    refetchInterval: 30000,
+    queryKey: ['recent-harvests', week, year],
+    queryFn: () => getHarvestAssignments({ week, year, limit: 5 }),
+    enabled: true,
   });
   
-  // Fetch recent loading records
+  // Fetch recent loading records for selected week
   const { data: loadings, isLoading: loadingsLoading } = useQuery({
-    queryKey: ['recent-loadings'],
-    queryFn: () => getLoadingRecords({ limit: 5 }),
-    refetchInterval: 30000,
+    queryKey: ['recent-loadings', week, year],
+    queryFn: () => getLoadingRecords({ week, year, limit: 5 }),
+    enabled: true,
   });
   
-  // Fetch recent transport trips
+  // Fetch recent transport trips for selected week
   const { data: transports, isLoading: transportsLoading } = useQuery({
-    queryKey: ['recent-transports'],
-    queryFn: () => getTransportTrips({ limit: 5 }),
-    refetchInterval: 30000,
+    queryKey: ['recent-transports', week, year],
+    queryFn: () => getTransportTrips({ week, year, limit: 5 }),
+    enabled: true,
   });
   
   const summaryData = summary?.data || {};
+  const weeklyData = weeklyReturns?.data || {};
   
   // Calculate statistics
   const harvestRevenue = summaryData.harvest_revenue || 0;
@@ -60,39 +75,45 @@ const Dashboard = () => {
   const tonnageVariance = actualTons - expectedTons;
   const tonnageVariancePercent = expectedTons > 0 ? (tonnageVariance / expectedTons) * 100 : 0;
   
+  // Get loading and transport totals from weekly data
+  const loadingTotalTons = weeklyData.loading_total_tons || 0;
+  const transportTotalTrips = weeklyData.transport_total_trips || 0;
+  
   // Count active assignments (in_progress and not completed)
   const activeAssignments = harvests?.data?.filter(h => 
     h.computed_status === 'in_progress' || h.status === 'in_progress'
   ).length || 0;
   
+  const totalAssignments = harvests?.data?.length || 0;
+  
   const statCards = [
     { 
-      label: "This Week's Harvest Revenue", 
+      label: "Harvest Revenue", 
       value: formatCurrency(harvestRevenue), 
       subValue: `${formatTons(actualTons)} harvested`,
       color: "green",
       icon: Scale,
       trend: tonnageVariance > 0 ? 'up' : tonnageVariance < 0 ? 'down' : 'neutral',
-      trendValue: `${Math.abs(tonnageVariancePercent).toFixed(1)}% ${tonnageVariance > 0 ? 'above' : tonnageVariance < 0 ? 'below' : ''} expectation`
+      trendValue: tonnageVariance !== 0 ? `${Math.abs(tonnageVariancePercent).toFixed(1)}% ${tonnageVariance > 0 ? 'above' : 'below'} expectation` : 'On target'
     },
     { 
-      label: "This Week's Loading Revenue", 
+      label: "Loading Revenue", 
       value: formatCurrency(loadingRevenue), 
-      subValue: `${formatTons(summaryData.loading_total_tons || 0)} loaded`,
+      subValue: `${formatTons(loadingTotalTons)} loaded`,
       color: "blue",
       icon: Truck
     },
     { 
-      label: "This Week's Transport Revenue", 
+      label: "Transport Revenue", 
       value: formatCurrency(transportRevenue), 
-      subValue: `${summaryData.transport_total_trips || 0} trips`,
+      subValue: `${transportTotalTrips} trips`,
       color: "amber",
       icon: TrendingUp
     },
     { 
-      label: "Total Weekly Net", 
+      label: "Total Net Profit", 
       value: formatCurrency(sagibNet), 
-      subValue: `Profit after costs`,
+      subValue: `${((sagibNet / totalRevenue) * 100).toFixed(1)}% margin`,
       color: "green",
       icon: DollarSign
     },
@@ -106,7 +127,7 @@ const Dashboard = () => {
     { 
       label: "Active Assignments", 
       value: activeAssignments.toString(), 
-      subValue: `${harvests?.data?.length || 0} total this week`,
+      subValue: `${totalAssignments} total this week`,
       color: "amber",
       icon: Users
     }
@@ -114,10 +135,10 @@ const Dashboard = () => {
   
   // Recent harvest columns
   const harvestColumns = [
-    { key: "assignment_date", label: "Date", render: (v) => new Date(v).toLocaleDateString() },
-    { key: "headman_name", label: "Headman" },
-    { key: "field_code", label: "Field" },
-    { key: "expected_tonnage", label: "Expected", render: (v) => formatTons(v) },
+    { key: "assignment_date", label: "Date", render: (v) => v ? new Date(v).toLocaleDateString() : 'N/A' },
+    { key: "headman_name", label: "Headman", render: (v) => v || 'N/A' },
+    { key: "field_code", label: "Field", render: (v) => v || 'N/A' },
+    { key: "expected_tonnage", label: "Expected", render: (v) => formatTons(v || 0) },
     { key: "actual_tonnage", label: "Actual", render: (v) => formatTons(v || 0) },
     { 
       key: "computed_status", 
@@ -137,33 +158,37 @@ const Dashboard = () => {
   
   // Recent loading columns
   const loadingColumns = [
-    { key: "load_date", label: "Date", render: (v) => new Date(v).toLocaleDateString() },
-    { key: "outgrower_name", label: "Outgrower" },
-    { key: "tons_loaded", label: "Tons", render: (v) => formatTons(v) },
-    { key: "weighbridge_name", label: "Weighbridge" }
+    { key: "load_date", label: "Date", render: (v) => v ? new Date(v).toLocaleDateString() : 'N/A' },
+    { key: "outgrower_name", label: "Outgrower", render: (v) => v || 'N/A' },
+    { key: "field_code", label: "Field", render: (v) => v || 'N/A' },
+    { key: "tons_loaded", label: "Tons", render: (v) => formatTons(v || 0) },
+    { key: "weighbridge_name", label: "Weighbridge", render: (v) => v || 'N/A' }
   ];
   
   // Recent transport columns
   const transportColumns = [
-    { key: "trip_date", label: "Date", render: (v) => new Date(v).toLocaleDateString() },
-    { key: "plate_no", label: "Truck" },
-    { key: "driver_name", label: "Driver" },
-    { key: "tons_transported", label: "Tons", render: (v) => formatTons(v) },
-    { key: "total_revenue", label: "Revenue", render: (v) => formatCurrency(v) }
+    { key: "trip_date", label: "Date", render: (v) => v ? new Date(v).toLocaleDateString() : 'N/A' },
+    { key: "plate_no", label: "Truck", render: (v) => v || 'N/A' },
+    { key: "driver_name", label: "Driver", render: (v) => v || 'N/A' },
+    { key: "tons_transported", label: "Tons", render: (v) => formatTons(v || 0) },
+    { key: "total_revenue", label: "Revenue", render: (v) => formatCurrency(v || 0) }
   ];
   
   return (
     <div className="space-y-6">
-      {/* Page Header */}
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Dashboard Overview</h2>
-        <p className="text-gray-600 mt-1">Week {currentWeek} • {weekDates.formatted}</p>
+      {/* Page Header with Week Picker */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Dashboard Overview</h2>
+          <p className="text-gray-600 mt-1">View performance data for any week</p>
+        </div>
+        <WeekPicker week={week} year={year} onChange={handleWeekChange} />
       </div>
       
       {/* Stat Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {statCards.map((stat, index) => (
-          <div key={index} className="bg-white rounded-lg shadow p-6 border-l-4 border-${stat.color}-500">
+          <div key={index} className={`bg-white rounded-lg shadow p-6 border-l-4 border-${stat.color}-500`}>
             <div className="flex items-center justify-between">
               <div className="flex-1">
                 <p className="text-sm text-gray-600">{stat.label}</p>
@@ -188,11 +213,11 @@ const Dashboard = () => {
         ))}
       </div>
       
-      {/* Charts Section - Placeholder for future charts */}
+      {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Weekly Revenue Breakdown</h3>
+            <h3 className="text-lg font-semibold text-gray-900">Revenue Breakdown</h3>
             <BarChart3 className="h-5 w-5 text-gray-400" />
           </div>
           <div className="space-y-3">
@@ -245,7 +270,7 @@ const Dashboard = () => {
             <h3 className="text-lg font-semibold text-gray-900">Tonnage Overview</h3>
             <PieChart className="h-5 w-5 text-gray-400" />
           </div>
-          <div className="space-y-3">
+          <div className="space-y-4">
             <div>
               <div className="flex justify-between text-sm mb-1">
                 <span>Expected Tonnage</span>
@@ -260,12 +285,15 @@ const Dashboard = () => {
                 <span>Actual Tonnage</span>
                 <span>{formatTons(actualTons)}</span>
               </div>
-              <div className="flex justify-between text-sm mt-2">
-                <span className="text-gray-500">Variance:</span>
-                <span className={tonnageVariance >= 0 ? 'text-green-600' : 'text-red-600'}>
-                  {tonnageVariance >= 0 ? '+' : ''}{formatTons(tonnageVariance)} ({tonnageVariancePercent.toFixed(1)}%)
-                </span>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div className="bg-green-600 h-2 rounded-full" style={{ width: `${expectedTons > 0 ? (actualTons / expectedTons) * 100 : 0}%` }} />
               </div>
+            </div>
+            <div className="flex justify-between text-sm mt-2 pt-2 border-t">
+              <span className="text-gray-500">Variance:</span>
+              <span className={tonnageVariance >= 0 ? 'text-green-600' : 'text-red-600'}>
+                {tonnageVariance >= 0 ? '+' : ''}{formatTons(tonnageVariance)} ({tonnageVariancePercent.toFixed(1)}%)
+              </span>
             </div>
           </div>
         </div>
@@ -282,7 +310,7 @@ const Dashboard = () => {
             columns={harvestColumns}
             data={harvests?.data?.slice(0, 5) || []}
             loading={harvestsLoading}
-            emptyMessage="No harvest assignments found"
+            emptyMessage="No harvest assignments found for this week"
           />
         </div>
         
@@ -293,7 +321,7 @@ const Dashboard = () => {
               columns={loadingColumns}
               data={loadings?.data?.slice(0, 5) || []}
               loading={loadingsLoading}
-              emptyMessage="No loading records found"
+              emptyMessage="No loading records found for this week"
             />
           </div>
           
@@ -303,15 +331,20 @@ const Dashboard = () => {
               columns={transportColumns}
               data={transports?.data?.slice(0, 5) || []}
               loading={transportsLoading}
-              emptyMessage="No transport trips found"
+              emptyMessage="No transport trips found for this week"
             />
           </div>
         </div>
       </div>
       
-      {/* Refresh timestamp */}
-      <div className="text-right text-xs text-gray-400">
-        Last updated: {new Date().toLocaleTimeString()}
+      {/* Week Summary */}
+      <div className="bg-white rounded-lg shadow p-4 text-center">
+        <p className="text-sm text-gray-500">
+          Week {week}, {year} • {weekDates.formatted}
+        </p>
+        <p className="text-xs text-gray-400 mt-1">
+          Data updates in real-time as you add harvest, loading, and transport records
+        </p>
       </div>
     </div>
   );

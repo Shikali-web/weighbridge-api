@@ -1,40 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, TrendingUp, Truck, Scale, DollarSign, Package, Users, BarChart3, PieChart } from 'lucide-react';
+import { Calendar, TrendingUp, Truck, Scale, DollarSign } from 'lucide-react';
 import DataTable from '../../components/shared/DataTable';
 import EmptyState from '../../components/shared/EmptyState';
 import { formatCurrency, formatTons } from '../../utils/formatters';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RePieChart, Pie, Cell } from 'recharts';
 
-const DailyReturns = () => {
-  const [selectedDate, setSelectedDate] = useState('');
+const DailyNew = () => {
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [availableDates, setAvailableDates] = useState([]);
-
-  // Fetch available dates on component mount
-  useEffect(() => {
-    const fetchAvailableDates = async () => {
-      try {
-        const response = await fetch('http://localhost:5000/api/reports/available-dates');
-        const result = await response.json();
-        if (result.success && result.data.length > 0) {
-          setAvailableDates(result.data);
-          setSelectedDate(result.data[0]);
-        }
-      } catch (err) {
-        console.error('Error fetching dates:', err);
-      }
-    };
-    fetchAvailableDates();
-  }, []);
-
-  // Fetch data when date changes
-  useEffect(() => {
-    if (selectedDate) {
-      fetchData();
-    }
-  }, [selectedDate]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -57,12 +31,15 @@ const DailyReturns = () => {
     }
   };
 
+  useEffect(() => {
+    fetchData();
+  }, [selectedDate]);
+
   const handleDateChange = (e) => {
     setSelectedDate(e.target.value);
   };
 
   const formatDate = (date) => {
-    if (!date) return '';
     return new Date(date).toLocaleDateString('en-KE', { 
       weekday: 'long', 
       year: 'numeric', 
@@ -72,21 +49,16 @@ const DailyReturns = () => {
   };
 
   const harvestColumns = [
-    { key: "id", label: "ID", width: 60 },
+    { key: "id", label: "ID" },
     { key: "headman_name", label: "Headman", render: (v) => v || '-' },
     { key: "field_code", label: "Field", render: (v) => v || '-' },
     { key: "turnup", label: "Turnup", render: (v) => v || 0 },
     { key: "expected_tonnage", label: "Expected (T)", render: (v) => formatTons(v || 0) },
-    { key: "status", label: "Status", render: (v) => {
-      const statusClass = v === 'completed' ? 'bg-green-100 text-green-800' : 
-                          v === 'in_progress' ? 'bg-blue-100 text-blue-800' : 
-                          'bg-yellow-100 text-yellow-800';
-      return <span className={`px-2 py-1 text-xs rounded-full ${statusClass}`}>{v?.toUpperCase() || 'PENDING'}</span>;
-    }}
+    { key: "status", label: "Status", render: (v) => v?.toUpperCase() || 'PENDING' }
   ];
 
   const loadingColumns = [
-    { key: "id", label: "ID", width: 60 },
+    { key: "id", label: "ID" },
     { key: "outgrower_name", label: "Outgrower", render: (v) => v || '-' },
     { key: "field_code", label: "Field", render: (v) => v || '-' },
     { key: "weighbridge_name", label: "Weighbridge", render: (v) => v || '-' },
@@ -96,7 +68,7 @@ const DailyReturns = () => {
   ];
 
   const transportColumns = [
-    { key: "id", label: "ID", width: 60 },
+    { key: "id", label: "ID" },
     { key: "plate_no", label: "Truck", render: (v) => v || '-' },
     { key: "driver_name", label: "Driver", render: (v) => v || '-' },
     { key: "outgrower_name", label: "Outgrower", render: (v) => v || '-' },
@@ -104,19 +76,6 @@ const DailyReturns = () => {
     { key: "tons_transported", label: "Tons", render: (v) => formatTons(v || 0) },
     { key: "total_revenue", label: "Revenue", render: (v) => formatCurrency(v || 0) }
   ];
-
-  // Prepare chart data
-  const revenueChartData = data ? [
-    { name: 'Harvest', value: data.harvest_revenue || 0, color: '#22c55e' },
-    { name: 'Loading', value: data.loading_revenue || 0, color: '#3b82f6' },
-    { name: 'Transport', value: data.transport_revenue || 0, color: '#f59e0b' }
-  ] : [];
-
-  const tonnageChartData = data ? [
-    { name: 'Harvest', tons: data.harvest_total || 0, color: '#22c55e' },
-    { name: 'Loading', tons: data.loading_total || 0, color: '#3b82f6' },
-    { name: 'Transport', tons: data.transport_total || 0, color: '#f59e0b' }
-  ] : [];
 
   if (loading) {
     return (
@@ -131,17 +90,14 @@ const DailyReturns = () => {
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <h2 className="text-2xl font-bold text-gray-900">Daily Returns</h2>
-          <div className="flex items-center gap-2 bg-white rounded-lg shadow px-4 py-2">
+          <div className="flex items-center gap-2">
             <Calendar className="h-5 w-5 text-gray-500" />
-            <select
+            <input
+              type="date"
               value={selectedDate}
               onChange={handleDateChange}
-              className="border-none focus:outline-none py-1"
-            >
-              {availableDates.map(date => (
-                <option key={date} value={date}>{formatDate(date)}</option>
-              ))}
-            </select>
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+            />
           </div>
         </div>
         <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
@@ -165,26 +121,23 @@ const DailyReturns = () => {
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Daily Returns</h2>
-          <p className="text-sm text-gray-500 mt-1">{selectedDate ? formatDate(selectedDate) : 'Select a date'}</p>
+          <p className="text-sm text-gray-500 mt-1">{formatDate(selectedDate)}</p>
         </div>
         <div className="flex items-center gap-2 bg-white rounded-lg shadow px-4 py-2">
           <Calendar className="h-5 w-5 text-gray-500" />
-          <select
+          <input
+            type="date"
             value={selectedDate}
             onChange={handleDateChange}
-            className="border-none focus:outline-none py-1"
-          >
-            {availableDates.map(date => (
-              <option key={date} value={date}>{formatDate(date)}</option>
-            ))}
-          </select>
+            className="border-none focus:outline-none"
+          />
         </div>
       </div>
 
       {!hasData ? (
         <EmptyState 
           title="No Data Available"
-          subtitle={`No records found for ${selectedDate ? formatDate(selectedDate) : 'the selected date'}. Try selecting a different date from the dropdown.`}
+          subtitle={`No records found for ${formatDate(selectedDate)}. Try selecting a different date.`}
         />
       ) : (
         <>
@@ -236,109 +189,6 @@ const DailyReturns = () => {
                   </p>
                 </div>
                 <DollarSign className="h-8 w-8 opacity-80" />
-              </div>
-            </div>
-          </div>
-
-          {/* Charts Section */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white rounded-lg shadow p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <PieChart className="h-5 w-5 text-gray-500" />
-                <h3 className="text-lg font-semibold text-gray-900">Revenue Breakdown</h3>
-              </div>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <RePieChart>
-                    <Pie
-                      data={revenueChartData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={80}
-                      paddingAngle={5}
-                      dataKey="value"
-                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                    >
-                      {revenueChartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(value) => formatCurrency(value)} />
-                  </RePieChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-lg shadow p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <BarChart3 className="h-5 w-5 text-gray-500" />
-                <h3 className="text-lg font-semibold text-gray-900">Tonnage Breakdown</h3>
-              </div>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={tonnageChartData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis tickFormatter={(value) => formatTons(value)} />
-                    <Tooltip formatter={(value) => formatTons(value)} />
-                    <Bar dataKey="tons" fill="#4caf7d" radius={[4, 4, 0, 0]}>
-                      {tonnageChartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
-
-          {/* Additional Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-white rounded-lg shadow p-4">
-              <div className="flex items-center gap-2 text-gray-500 mb-2">
-                <Package className="h-4 w-4" />
-                <span className="text-sm">Total Tonnage</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900">{formatTons(data.harvest_total + data.loading_total + data.transport_total)}</p>
-              <div className="mt-2 text-xs text-gray-500 flex flex-wrap gap-2">
-                <span>Harvest: {formatTons(data.harvest_total)}</span>
-                <span>|</span>
-                <span>Load: {formatTons(data.loading_total)}</span>
-                <span>|</span>
-                <span>Transport: {formatTons(data.transport_total)}</span>
-              </div>
-            </div>
-            
-            <div className="bg-white rounded-lg shadow p-4">
-              <div className="flex items-center gap-2 text-gray-500 mb-2">
-                <Users className="h-4 w-4" />
-                <span className="text-sm">Active Workers</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900">
-                {new Set(data.harvests?.map(h => h.headman_id).filter(id => id)).size + 
-                 new Set(data.loadings?.map(l => l.supervisor_id).filter(id => id)).size + 
-                 new Set(data.transports?.map(t => t.driver_id).filter(id => id)).size}
-              </p>
-              <div className="mt-2 text-xs text-gray-500 flex flex-wrap gap-2">
-                <span>Headmen: {new Set(data.harvests?.map(h => h.headman_id).filter(id => id)).size}</span>
-                <span>|</span>
-                <span>Supervisors: {new Set(data.loadings?.map(l => l.supervisor_id).filter(id => id)).size}</span>
-                <span>|</span>
-                <span>Drivers: {new Set(data.transports?.map(t => t.driver_id).filter(id => id)).size}</span>
-              </div>
-            </div>
-            
-            <div className="bg-white rounded-lg shadow p-4">
-              <div className="flex items-center gap-2 text-gray-500 mb-2">
-                <TrendingUp className="h-4 w-4" />
-                <span className="text-sm">Avg Revenue per Trip</span>
-              </div>
-              <p className="text-2xl font-bold text-primary">
-                {formatCurrency(data.transport_count > 0 ? data.transport_revenue / data.transport_count : 0)}
-              </p>
-              <div className="mt-2 text-xs text-gray-500">
-                {data.transport_count} transport trips
               </div>
             </div>
           </div>
@@ -396,4 +246,4 @@ const DailyReturns = () => {
   );
 };
 
-export default DailyReturns;
+export default DailyNew;

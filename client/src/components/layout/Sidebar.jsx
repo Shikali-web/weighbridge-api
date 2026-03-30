@@ -63,11 +63,10 @@ const Sidebar = () => {
       items: [
         { path: '/reports/daily', icon: Calendar, label: 'Daily Returns' },
         { path: '/reports/weekly', icon: TrendingUp, label: 'Weekly Returns' },
-        { path: '/reports/headman-performance', icon: Users, label: 'Headman Performance' },
         { path: '/reports/headman-harvest', icon: Scale, label: 'Headman Harvest Report' },
-        { path: '/reports/supervisor-performance', icon: UserCircle, label: 'Supervisor Performance' },
         { path: '/reports/supervisor-loading', icon: Truck, label: 'Supervisor Loading Report' },
         { path: '/reports/driver-performance', icon: Truck, label: 'Driver Performance' },
+        { path: '/reports/outgrower-performance', icon: Users, label: 'Outgrower Performance' },
       ]
     },
     {
